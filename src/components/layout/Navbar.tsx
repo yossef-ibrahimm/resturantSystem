@@ -74,9 +74,10 @@ const Navbar = () => {
             className="relative grid h-10 w-10 place-items-center"
             onClick={() => setOpen((v) => !v)}
           >
-          <Menu className={cn("h-5 w-5 transition-all", open && "rotate-90 scale-0 opacity-0")} />
-          <X className={cn("absolute h-5 w-5 transition-all", !open && "-rotate-90 scale-0 opacity-0")} />
-        </button>
+            <Menu className={cn("h-5 w-5 transition-all", open && "rotate-90 scale-0 opacity-0")} />
+            <X className={cn("absolute h-5 w-5 transition-all", !open && "-rotate-90 scale-0 opacity-0")} />
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
