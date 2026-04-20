@@ -5,6 +5,7 @@ import PageWrapper from "@/components/layout/PageWrapper";
 import ChefsList from "@/components/chefs/ChefsList";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import Reveal from "@/components/layout/Reveal";
 import { chefs as allChefs, cuisines, type Chef } from "@/data/dummyChefs";
 import heroImage from "@/assets/hero-table.jpg";
 
@@ -64,36 +65,40 @@ const Home = () => {
 
       {/* Filters + grid */}
       <section className="container py-16 md:py-24">
-        <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-accent">The Roster</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Meet the chefs</h2>
+        <Reveal>
+          <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-accent">The Roster</p>
+              <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Meet the chefs</h2>
+            </div>
+            <div className="relative w-full md:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-9"
+                aria-label="Search chefs by name"
+              />
+            </div>
           </div>
-          <div className="relative w-full md:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by name…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-9"
-              aria-label="Search chefs by name"
-            />
-          </div>
-        </div>
+        </Reveal>
 
-        <div className="mb-10 flex flex-wrap gap-2">
-          {cuisines.map((c) => (
-            <Button
-              key={c}
-              variant={activeCuisine === c ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveCuisine(c)}
-              className="rounded-full"
-            >
-              {c}
-            </Button>
-          ))}
-        </div>
+        <Reveal delay={80}>
+          <div className="mb-10 flex flex-wrap gap-2">
+            {cuisines.map((c) => (
+              <Button
+                key={c}
+                variant={activeCuisine === c ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveCuisine(c)}
+                className="rounded-full"
+              >
+                {c}
+              </Button>
+            ))}
+          </div>
+        </Reveal>
 
         {chefs === null ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

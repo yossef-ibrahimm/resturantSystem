@@ -5,9 +5,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { RecipesProvider } from "@/context/RecipesContext";
+import { MenuProvider } from "@/context/MenuContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import Index from "./pages/Index.tsx";
 import ChefRecipes from "./pages/ChefRecipes.tsx";
 import MyRecipes from "./pages/MyRecipes.tsx";
+import Menu from "./pages/Menu.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -15,24 +18,29 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <RecipesProvider>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/chefs/:chefId" element={<ChefRecipes />} />
-              <Route path="/my-recipes" element={<MyRecipes />} />
-              <Route path="/auth" element={<Auth />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </RecipesProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <RecipesProvider>
+              <MenuProvider>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/chefs/:chefId" element={<ChefRecipes />} />
+                  <Route path="/menu" element={<Menu />} />
+                  <Route path="/my-recipes" element={<MyRecipes />} />
+                  <Route path="/auth" element={<Auth />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </MenuProvider>
+            </RecipesProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
