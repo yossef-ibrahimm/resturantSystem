@@ -3,7 +3,6 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Menu, X, ChefHat } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import ThemeToggle from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -51,7 +50,6 @@ const Navbar = () => {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <ThemeToggle />
           {isAuthenticated ? (
             <>
               <span className="text-sm text-muted-foreground">Hi, {user?.name}</span>
@@ -66,18 +64,15 @@ const Navbar = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-2 md:hidden">
-          <ThemeToggle />
-          <button
-            aria-label="Toggle menu"
-            aria-expanded={open}
-            className="relative grid h-10 w-10 place-items-center"
-            onClick={() => setOpen((v) => !v)}
-          >
-            <Menu className={cn("h-5 w-5 transition-all", open && "rotate-90 scale-0 opacity-0")} />
-            <X className={cn("absolute h-5 w-5 transition-all", !open && "-rotate-90 scale-0 opacity-0")} />
-          </button>
-        </div>
+        <button
+          aria-label="Toggle menu"
+          aria-expanded={open}
+          className="relative grid h-10 w-10 place-items-center md:hidden"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Menu className={cn("h-5 w-5 transition-all", open && "rotate-90 scale-0 opacity-0")} />
+          <X className={cn("absolute h-5 w-5 transition-all", !open && "-rotate-90 scale-0 opacity-0")} />
+        </button>
       </div>
 
       {/* Mobile menu */}

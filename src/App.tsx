@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { RecipesProvider } from "@/context/RecipesContext";
-import { ThemeProvider } from "@/context/ThemeContext";
 import Index from "./pages/Index.tsx";
 import ChefRecipes from "./pages/ChefRecipes.tsx";
 import MyRecipes from "./pages/MyRecipes.tsx";
@@ -16,26 +15,24 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <RecipesProvider>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/chefs/:chefId" element={<ChefRecipes />} />
-                <Route path="/my-recipes" element={<MyRecipes />} />
-                <Route path="/auth" element={<Auth />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </RecipesProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <RecipesProvider>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/chefs/:chefId" element={<ChefRecipes />} />
+              <Route path="/my-recipes" element={<MyRecipes />} />
+              <Route path="/auth" element={<Auth />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </RecipesProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
   </QueryClientProvider>
 );
 
