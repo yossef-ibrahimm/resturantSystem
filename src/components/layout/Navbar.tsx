@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Menu, X, ChefHat } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import ThemeToggle from "@/components/layout/ThemeToggle";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const links = [
