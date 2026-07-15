@@ -1,21 +1,25 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Menu, X, ChefHat } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { Menu, X, UtensilsCrossed, ShoppingCart, Globe } from "lucide-react";
+import { useAuthStore, selectIsAuthenticated } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
+import { useLanguage } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import ThemeToggle from "./ThemeToggle";
-
-const links = [
-  { to: "/", label: "Chefs" },
-  { to: "/menu", label: "Menu" },
-  { to: "/my-recipes", label: "My Cookbook" },
-];
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const { itemCount } = useCartStore();
+  const { t, toggleLanguage, isArabic } = useLanguage();
   const navigate = useNavigate();
+
+  const publicLinks = [
+    { to: "/", label: t.nav.menu },
+    { to: "/order-status", label: t.nav.orderStatus },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -27,12 +31,12 @@ const Navbar = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-md">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2 font-display text-xl font-semibold tracking-tight">
-          <ChefHat className="h-5 w-5 text-accent" />
-          Maison
+          <UtensilsCrossed className="h-5 w-5 text-accent" />
+          {t.appName}
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          {links.map((l) => (
+          {publicLinks.map((l) => (
             <NavLink
               key={l.to}
               to={l.to}
@@ -41,8 +45,7 @@ const Navbar = () => {
                 cn(
                   "relative text-sm font-medium transition-colors hover:text-foreground",
                   isActive ? "text-foreground" : "text-muted-foreground",
-                  isActive &&
-                    "after:absolute after:-bottom-1.5 after:left-0 after:h-px after:w-full after:bg-accent"
+                  isActive && "after:absolute after:-bottom-1.5 after:left-0 after:h-px after:w-full after:bg-accent"
                 )
               }
             >
@@ -52,23 +55,61 @@ const Navbar = () => {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleLanguage}
+            className="h-9 w-9"
+            aria-label="Toggle language"
+          >
+            <Globe className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-9 w-9"
+            onClick={() => navigate("/checkout")}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {itemCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+                {itemCount}
+              </span>
+            )}
+          </Button>
+
           {isAuthenticated ? (
             <>
-              <span className="text-sm text-muted-foreground">Hi, {user?.name}</span>
+              <span className="text-sm text-muted-foreground">{user?.name}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
-                Sign out
+                {t.nav.logout}
               </Button>
             </>
           ) : (
-            <Button size="sm" onClick={() => navigate("/auth")}>
-              Sign in
+            <Button size="sm" onClick={() => navigate("/admin/login")}>
+              {t.nav.login}
             </Button>
           )}
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
-          <ThemeToggle />
+          <Button variant="ghost" size="icon" onClick={toggleLanguage} className="h-9 w-9">
+            <Globe className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-9 w-9"
+            onClick={() => navigate("/checkout")}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {itemCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+                {itemCount}
+              </span>
+            )}
+          </Button>
           <button
             aria-label="Toggle menu"
             aria-expanded={open}
@@ -81,7 +122,6 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile menu */}
       <div
         className={cn(
           "overflow-hidden border-t border-border/60 bg-background md:hidden",
@@ -90,7 +130,7 @@ const Navbar = () => {
         style={{ transition: "max-height 0.3s ease" }}
       >
         <div className="container flex flex-col gap-1 py-4">
-          {links.map((l) => (
+          {publicLinks.map((l) => (
             <NavLink
               key={l.to}
               to={l.to}
@@ -109,17 +149,17 @@ const Navbar = () => {
           <div className="mt-2 border-t border-border pt-3">
             {isAuthenticated ? (
               <Button variant="outline" className="w-full" onClick={handleLogout}>
-                Sign out ({user?.name})
+                {t.nav.logout} ({user?.name})
               </Button>
             ) : (
               <Button
                 className="w-full"
                 onClick={() => {
                   setOpen(false);
-                  navigate("/auth");
+                  navigate("/admin/login");
                 }}
               >
-                Sign in
+                {t.nav.login}
               </Button>
             )}
           </div>

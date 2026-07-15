@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 /* ============================================================
-   MAISON — Editorial culinary design system
+   TASTY TABLE — Restaurant Design System
    Warm cream, deep forest green, terracotta. HSL only.
    ============================================================ */
 
 @layer base {
   :root {
     /* Surfaces */
-    --background: 38 33% 96%;            /* warm cream */
-    --foreground: 150 18% 12%;           /* deep forest ink */
+    --background: 38 33% 96%;
+    --foreground: 150 18% 12%;
 
     --card: 36 40% 98%;
     --card-foreground: 150 18% 12%;
@@ -20,17 +20,17 @@
     --popover-foreground: 150 18% 12%;
 
     /* Brand */
-    --primary: 153 32% 18%;              /* deep forest green */
+    --primary: 153 32% 18%;
     --primary-foreground: 38 40% 96%;
     --primary-glow: 153 28% 32%;
 
-    --secondary: 36 30% 90%;
+    --secondary: 36 22% 92%;
     --secondary-foreground: 150 18% 12%;
 
     --muted: 36 22% 90%;
     --muted-foreground: 150 8% 38%;
 
-    --accent: 16 55% 52%;                /* terracotta */
+    --accent: 16 55% 52%;
     --accent-foreground: 38 40% 96%;
     --accent-soft: 16 60% 92%;
 
@@ -54,7 +54,6 @@
 
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Sidebar (unused but defined) */
     --sidebar-background: 38 33% 96%;
     --sidebar-foreground: 150 18% 12%;
     --sidebar-primary: 153 32% 18%;
@@ -104,6 +103,16 @@
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
   }
+}
+
+/* RTL-specific adjustments */
+[dir="rtl"] {
+  text-align: right;
+}
+
+/* Arabic font override */
+html[lang="ar"] body {
+  font-family: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer utilities {
