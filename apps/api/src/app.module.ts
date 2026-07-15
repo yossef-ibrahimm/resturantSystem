@@ -6,6 +6,7 @@ import { MenuModule } from "./menu/menu.module";
 import { OrdersModule } from "./orders/orders.module";
 import { UsersModule } from "./users/users.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { ReportsModule } from "./reports/reports.module";
 import { StorageModule } from "./storage/storage.module";
 import { WebsocketModule } from "./websocket/websocket.module";
 
@@ -18,6 +19,7 @@ import { WebsocketModule } from "./websocket/websocket.module";
     OrdersModule,
     UsersModule,
     DashboardModule,
+    ReportsModule,
     StorageModule,
     WebsocketModule,
   ],

@@ -1,206 +1,274 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLanguage } from "@/i18n";
-import { getDashboardStats } from "@/lib/api";
+import {
+  getReportSummary,
+  getReportRevenue,
+  getReportOrdersByStatus,
+  getReportTopItems,
+  getReportPeakHours,
+  getReportUnavailableItems,
+  getOrders,
+} from "@/lib/api";
 import { formatPrice, timeAgo } from "@/lib/utils";
-import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, STATUS_COLORS } from "@/lib/constants";
+import { ORDER_STATUS_LABELS, STATUS_COLORS } from "@/lib/constants";
+import { DateRangePicker, useDateRange } from "@/components/DateRangePicker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import {
-  ShoppingCart, DollarSign, TrendingUp, Clock, ArrowUpRight,
-  UtensilsCrossed, Truck, BarChart3, Calendar
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  ResponsiveContainer, Cell, Tooltip,
+} from "recharts";
+import {
+  DollarSign, ShoppingCart, TrendingUp, TrendingDown, UtensilsCrossed,
+  Truck, RefreshCw, AlertTriangle, Clock, ArrowUpRight, BarChart3, Flame,
+  Minus,
 } from "lucide-react";
-import type { DashboardStats, Order } from "@/lib/types";
+import type { ReportSummary, RevenueOverTime, OrdersByStatus, TopItemsReport, PeakHoursReport, UnavailableItem, TopItem } from "@/lib/report-types";
+import type { Order } from "@/lib/types";
 
-function getGreeting(language: string): string {
-  const hour = new Date().getHours();
-  if (language === "ar") {
-    if (hour < 12) return "صباح الخير";
-    if (hour < 17) return "مساء الخير";
-    return "مساء الخير";
+const STATUS_COLORS_HEX: Record<string, string> = {
+  received: "#3b82f6",
+  preparing: "#f59e0b",
+  ready: "#10b981",
+  completed: "#6b7280",
+};
+
+function ChangeIndicator({ value, language }: { value: number | null; language: string }) {
+  if (value === null) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+        <Minus className="h-3 w-3" />
+        {language === "ar" ? "جديد" : "New"}
+      </span>
+    );
   }
-  if (hour < 12) return "Good Morning";
-  if (hour < 17) return "Good Afternoon";
-  return "Good Evening";
+  const isPositive = value > 0;
+  const isZero = value === 0;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isZero ? "text-muted-foreground" : isPositive ? "text-emerald-600" : "text-red-500"}`}>
+      {isZero ? <Minus className="h-3 w-3" /> : isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+      {isPositive ? "+" : ""}{Math.round(value)}%
+    </span>
+  );
 }
 
-function getTodayDate(language: string): string {
-  const now = new Date();
-  if (language === "ar") {
-    return now.toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  }
-  return now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+function SkeletonCard() {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-8 w-20" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function AdminDashboard() {
   const { t, isArabic, language } = useLanguage();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [dateRange, setDateRange] = useDateRange();
 
-  useEffect(() => {
-    getDashboardStats()
-      .then((s) => { setStats(s); setLoading(false); })
-      .catch(() => { setError(true); setLoading(false); });
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [revenue, setRevenue] = useState<RevenueOverTime | null>(null);
+  const [statusData, setStatusData] = useState<OrdersByStatus | null>(null);
+  const [topItems, setTopItems] = useState<TopItemsReport | null>(null);
+  const [peakHours, setPeakHours] = useState<PeakHoursReport | null>(null);
+  const [unavailable, setUnavailable] = useState<UnavailableItem[]>([]);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const abortRef = useRef(0);
+
+  const fetchData = useCallback(async (from: string, to: string) => {
+    const reqId = ++abortRef.current;
+    setLoading(true);
+    try {
+      const [s, r, st, ti, ph, ui, ro] = await Promise.all([
+        getReportSummary(from, to),
+        getReportRevenue(from, to),
+        getReportOrdersByStatus(from, to),
+        getReportTopItems(from, to),
+        getReportPeakHours(from, to),
+        getReportUnavailableItems(),
+        getOrders(),
+      ]);
+      if (reqId !== abortRef.current) return;
+      setSummary(s);
+      setRevenue(r);
+      setStatusData(st);
+      setTopItems(ti);
+      setPeakHours(ph);
+      setUnavailable(ui);
+      setRecentOrders(ro.slice(0, 10));
+      setLastUpdated(new Date());
+    } catch {
+      // handled by individual api functions fallback
+    } finally {
+      if (reqId === abortRef.current) setLoading(false);
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="h-72 rounded-xl" />
-          <Skeleton className="h-72 rounded-xl" />
-          <Skeleton className="h-72 rounded-xl" />
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const from = dateRange.from.toISOString();
+    const to = dateRange.to.toISOString();
+    fetchData(from, to);
+  }, [dateRange, fetchData]);
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
-          <BarChart3 className="h-8 w-8 text-destructive" />
-        </div>
-        <p className="text-lg font-medium text-foreground mb-2">{t.error}</p>
-        <p className="text-sm text-muted-foreground mb-4">
-          {isArabic ? "تعذر تحميل البيانات" : "Failed to load dashboard data"}
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          {t.retry}
-        </button>
-      </div>
-    );
-  }
+  const handleRefresh = () => {
+    const from = dateRange.from.toISOString();
+    const to = dateRange.to.toISOString();
+    fetchData(from, to);
+  };
 
-  if (!stats) return null;
+  // ─── Summary ───
+  const summaryCards = summary
+    ? [
+        { label: t.admin.stats.totalRevenue, value: formatPrice(summary.revenue, language), change: summary.revenueChange, icon: DollarSign, gradient: "from-emerald-500/10 to-emerald-600/5", iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600" },
+        { label: t.admin.stats.totalOrders, value: summary.orderCount, change: summary.orderCountChange, icon: ShoppingCart, gradient: "from-blue-500/10 to-blue-600/5", iconBg: "bg-blue-500/10", iconColor: "text-blue-600" },
+        { label: t.admin.stats.avgOrderValue, value: formatPrice(summary.avgValue, language), change: summary.avgValueChange, icon: TrendingUp, gradient: "from-violet-500/10 to-violet-600/5", iconBg: "bg-violet-500/10", iconColor: "text-violet-600" },
+        { label: t.admin.stats.ordersByType, value: `${summary.dineIn} / ${summary.takeaway}`, change: null, icon: UtensilsCrossed, gradient: "from-amber-500/10 to-amber-600/5", iconBg: "bg-amber-500/10", iconColor: "text-amber-600", sub: `${t.admin.stats.dineIn} / ${t.admin.stats.takeaway}` },
+      ]
+    : [];
 
-  const dineInCount = stats.recentOrders.filter(o => o.orderType === "dine_in").length;
-  const takeawayCount = stats.recentOrders.filter(o => o.orderType === "takeaway").length;
-  const activeOrders = stats.recentOrders.filter(o => o.status !== "completed").length;
-  const maxCount = Math.max(...stats.topItems.map(i => i.count), 1);
+  // ─── Revenue Chart Data ───
+  const revenueData = revenue?.data || [];
+  const revenueChartConfig = {
+    revenue: { label: language === "ar" ? "الإيراد" : "Revenue", color: "hsl(153, 32%, 18%)" },
+    orders: { label: language === "ar" ? "الطلبات" : "Orders", color: "hsl(16, 55%, 52%)" },
+  };
 
-  const statCards = [
-    {
-      label: t.admin.stats.todayOrders,
-      value: stats.todayOrders,
-      icon: ShoppingCart,
-      gradient: "from-blue-500/10 to-blue-600/5",
-      iconBg: "bg-blue-500/10",
-      iconColor: "text-blue-600",
-      subtext: activeOrders > 0
-        ? (isArabic ? `${activeOrders} نشط` : `${activeOrders} active`)
-        : (isArabic ? "لا يوجد نشط" : "No active"),
-    },
-    {
-      label: t.admin.stats.todayRevenue,
-      value: formatPrice(stats.todayRevenue, language),
-      icon: DollarSign,
-      gradient: "from-emerald-500/10 to-emerald-600/5",
-      iconBg: "bg-emerald-500/10",
-      iconColor: "text-emerald-600",
-      subtext: isArabic ? "اليوم" : "Today",
-    },
-    {
-      label: isArabic ? "صالة" : "Dine-in",
-      value: dineInCount,
-      icon: UtensilsCrossed,
-      gradient: "from-amber-500/10 to-amber-600/5",
-      iconBg: "bg-amber-500/10",
-      iconColor: "text-amber-600",
-      subtext: ORDER_TYPE_LABELS.dine_in[language],
-    },
-    {
-      label: isArabic ? "تيك أواي" : "Takeaway",
-      value: takeawayCount,
-      icon: Truck,
-      gradient: "from-violet-500/10 to-violet-600/5",
-      iconBg: "bg-violet-500/10",
-      iconColor: "text-violet-600",
-      subtext: ORDER_TYPE_LABELS.takeaway[language],
-    },
-  ];
+  // ─── Peak Hours Chart ───
+  const peakData = peakHours?.hours || [];
+
+  // ─── Status Data ───
+  const statusBreakdown = statusData?.statuses || [];
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">
-          {getGreeting(language)}, <span className="text-primary">{isArabic ? "أحمد" : "Ahmed"}</span>
-        </h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" />
-          {getTodayDate(language)}
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t.admin.dashboard}</h1>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {t.admin.stats.lastUpdated}: {lastUpdated.toLocaleTimeString(language === "ar" ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
         </div>
       </div>
 
-      {/* Stat Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat) => (
-          <Card key={stat.label} className={`bg-gradient-to-br ${stat.gradient} border-border/50 hover:shadow-md transition-shadow`}>
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                  <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.subtext}</p>
-                </div>
-                <div className={`${stat.iconBg} rounded-xl p-2.5`}>
-                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {loading && !summary
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+          : summaryCards.map((card) => (
+              <Card key={card.label} className={`bg-gradient-to-br ${card.gradient} border-border/50`}>
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{card.label}</p>
+                      <p className="text-2xl font-bold tracking-tight">{card.value}</p>
+                      <div className="flex items-center gap-2">
+                        {card.change !== null && <ChangeIndicator value={card.change} language={language} />}
+                        {card.sub && <span className="text-xs text-muted-foreground">{card.sub}</span>}
+                      </div>
+                    </div>
+                    <div className={`${card.iconBg} rounded-xl p-2.5`}>
+                      <card.icon className={`h-5 w-5 ${card.iconColor}`} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
-      {/* Top Items + Recent Orders */}
+      {/* Revenue Over Time + Order Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Items - 2 cols */}
+        {/* Revenue Chart - 2/3 width */}
         <Card className="lg:col-span-2">
-          <div className="px-6 pt-6 pb-2">
-            <div className="flex items-center justify-between">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <div className="bg-accent/10 rounded-lg p-1.5">
-                  <TrendingUp className="h-4 w-4 text-accent" />
+                <div className="bg-primary/10 rounded-lg p-1.5">
+                  <BarChart3 className="h-4 w-4 text-primary" />
                 </div>
-                <h2 className="font-semibold">{t.admin.stats.topItems}</h2>
+                <h2 className="font-semibold">{t.admin.stats.revenueOverTime}</h2>
               </div>
-              <Badge variant="secondary" className="text-xs">
-                {isArabic ? `${stats.topItems.length} أصناف` : `${stats.topItems.length} items`}
-              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {revenue?.granularity === "hourly" ? (language === "ar" ? "بالساعة" : "Hourly") : revenue?.granularity === "daily" ? (language === "ar" ? "باليوم" : "Daily") : (language === "ar" ? "بالأسبوع" : "Weekly")}
+              </span>
             </div>
-          </div>
-          <CardContent className="px-6 pb-6">
-            {stats.topItems.length === 0 ? (
-              <div className="text-center py-12">
-                <BarChart3 className="h-10 w-10 text-muted-foreground/20 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">{t.admin.orders.noOrders}</p>
+            {loading && !revenue ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : revenueData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
+                <BarChart3 className="h-10 w-10 mb-2 opacity-30" />
+                <p className="text-sm">{t.admin.stats.noData}</p>
+              </div>
+            ) : (
+              <ChartContainer config={revenueChartConfig} className="h-[280px]">
+                <BarChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v} />
+                  <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => [formatPrice(Number(value), language), name === "revenue" ? (language === "ar" ? "الإيراد" : "Revenue") : (language === "ar" ? "الطلبات" : "Orders")]} />} />
+                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Order Status Breakdown - 1/3 width */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="bg-primary/10 rounded-lg p-1.5">
+                <Flame className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="font-semibold">{t.admin.stats.orderStatus}</h2>
+            </div>
+            {loading && !statusData ? (
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+              </div>
+            ) : statusBreakdown.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[240px] text-muted-foreground">
+                <Flame className="h-10 w-10 mb-2 opacity-30" />
+                <p className="text-sm">{t.admin.stats.noData}</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {stats.topItems.map((item, idx) => (
-                  <div key={idx} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
-                          {idx + 1}
-                        </span>
-                        <span className="text-sm font-medium group-hover:text-primary transition-colors">{item.name}</span>
+                {statusBreakdown.map((s) => (
+                  <div key={s.status} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS_HEX[s.status] }} />
+                        <span className="text-sm font-medium">{ORDER_STATUS_LABELS[s.status]?.[language]}</span>
                       </div>
-                      <span className="text-sm font-bold text-foreground">{item.count}x</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold">{s.count}</span>
+                        <span className="text-xs text-muted-foreground">{Math.round(s.percentage)}%</span>
+                      </div>
                     </div>
-                    <div className="ml-9 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
-                        style={{ width: `${(item.count / maxCount) * 100}%` }}
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${s.percentage}%`, backgroundColor: STATUS_COLORS_HEX[s.status] }}
                       />
                     </div>
                   </div>
@@ -209,56 +277,237 @@ export default function AdminDashboard() {
             )}
           </CardContent>
         </Card>
+      </div>
 
-        {/* Recent Orders */}
-        <Card>
-          <div className="px-6 pt-6 pb-2">
+      {/* Best-Selling Items + Category Breakdown + Peak Hours */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Best-Selling Items - 2/3 width */}
+        <Card className="lg:col-span-2">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="bg-accent/10 rounded-lg p-1.5">
+                <TrendingUp className="h-4 w-4 text-accent" />
+              </div>
+              <h2 className="font-semibold">{t.admin.stats.bestSellingItems}</h2>
+            </div>
+            {loading && !topItems ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : (
+              <Tabs defaultValue="quantity">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="quantity">{t.admin.stats.byQuantity}</TabsTrigger>
+                  <TabsTrigger value="revenue">{t.admin.stats.byRevenue}</TabsTrigger>
+                </TabsList>
+                <TabsContent value="quantity">
+                  <ItemsList items={topItems?.byQuantity || []} language={language} isArabic={isArabic} metric="quantity" />
+                </TabsContent>
+                <TabsContent value="revenue">
+                  <ItemsList items={topItems?.byRevenue || []} language={language} isArabic={isArabic} metric="revenue" />
+                </TabsContent>
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Peak Hours + Categories */}
+        <div className="space-y-6">
+          {/* Peak Hours */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="bg-primary/10 rounded-lg p-1.5">
+                  <Clock className="h-4 w-4 text-primary" />
+                </div>
+                <h2 className="font-semibold">{t.admin.stats.peakHours}</h2>
+              </div>
+              {loading && !peakHours ? (
+                <Skeleton className="h-[180px] w-full" />
+              ) : peakData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[180px] text-muted-foreground">
+                  <Clock className="h-8 w-8 mb-2 opacity-30" />
+                  <p className="text-xs">{t.admin.stats.noData}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-6 gap-1">
+                  {peakData.map((h) => (
+                    <div
+                      key={h.hour}
+                      className="flex flex-col items-center gap-1"
+                      title={`${h.label}: ${h.count}`}
+                    >
+                      <div
+                        className="w-full aspect-square rounded-md flex items-center justify-center text-[10px] font-bold text-white transition-colors"
+                        style={{
+                          backgroundColor: `hsl(153, 32%, ${18 + (1 - h.intensity) * 60}%)`,
+                          opacity: h.count === 0 ? 0.2 : 0.4 + h.intensity * 0.6,
+                        }}
+                      >
+                        {h.count > 0 ? h.count : ""}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground leading-none">{h.hour % 3 === 0 ? `${h.hour}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Category Breakdown */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="bg-primary/10 rounded-lg p-1.5">
+                  <UtensilsCrossed className="h-4 w-4 text-primary" />
+                </div>
+                <h2 className="font-semibold">{t.admin.stats.categoryBreakdown}</h2>
+              </div>
+              {loading && !topItems ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                </div>
+              ) : (topItems?.categories || []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[120px] text-muted-foreground">
+                  <p className="text-xs">{t.admin.stats.noData}</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {topItems!.categories.map((cat, idx) => {
+                    const maxRev = Math.max(...topItems!.categories.map((c) => c.revenue), 1);
+                    return (
+                      <div key={idx}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm">{isArabic ? cat.nameAr : cat.nameEn}</span>
+                          <span className="text-xs font-bold">{formatPrice(cat.revenue, language)}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary/60 transition-all duration-500"
+                            style={{ width: `${(cat.revenue / maxRev) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Unavailable Items Alert */}
+      {unavailable.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="bg-amber-100 rounded-lg p-2 shrink-0">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-amber-800">{t.admin.stats.unavailableAlert}</h3>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {unavailable.map((item) => (
+                    <Badge key={item.id} variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">
+                      {isArabic ? item.nameAr : item.nameEn}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Orders Feed */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="bg-primary/10 rounded-lg p-1.5">
                 <Clock className="h-4 w-4 text-primary" />
               </div>
-              <h2 className="font-semibold">{t.admin.stats.recentOrders}</h2>
+              <h2 className="font-semibold">{t.admin.stats.recentOrdersFeed}</h2>
             </div>
+            <span className="text-xs text-muted-foreground">
+              {language === "ar" ? "آخر 10 طلبات" : "Last 10 orders"}
+            </span>
           </div>
-          <CardContent className="px-6 pb-6">
-            {stats.recentOrders.length === 0 ? (
-              <div className="text-center py-12">
-                <Clock className="h-10 w-10 text-muted-foreground/20 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">{t.admin.orders.noOrders}</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {stats.recentOrders.map((order) => (
-                  <OrderRow key={order.id} order={order} language={language} isArabic={isArabic} t={t} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          {loading && recentOrders.length === 0 ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Clock className="h-10 w-10 mb-2 opacity-30" />
+              <p className="text-sm">{t.admin.stats.noData}</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {recentOrders.map((order) => (
+                <div key={order.id} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors">
+                  <div className={`w-1 h-8 rounded-full shrink-0 ${STATUS_COLORS[order.status]}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold">#{order.orderNumber}</span>
+                      <Badge className={`${STATUS_COLORS[order.status]} text-[10px] px-1.5 py-0`} variant="outline">
+                        {ORDER_STATUS_LABELS[order.status]?.[language]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium">{formatPrice(order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0), language)}</p>
+                    <p className="text-[11px] text-muted-foreground">{timeAgo(order.createdAt, language)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function OrderRow({ order, language, isArabic, t }: { order: Order; language: string; isArabic: boolean; t: any }) {
+// ─── Items List Subcomponent ───
+
+function ItemsList({ items, language, isArabic, metric }: { items: TopItem[]; language: string; isArabic: boolean; metric: "quantity" | "revenue" }) {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <TrendingUp className="h-10 w-10 mb-2 opacity-30" />
+        <p className="text-sm">{isArabic ? "لا توجد بيانات" : "No data available"}</p>
+      </div>
+    );
+  }
+
+  const maxVal = Math.max(...items.map((i) => (metric === "quantity" ? i.quantity : i.revenue)), 1);
+
   return (
-    <div className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors cursor-default group">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">#{order.orderNumber}</span>
-          <Badge className={`${STATUS_COLORS[order.status]} text-[10px] px-1.5 py-0`} variant="outline">
-            {ORDER_STATUS_LABELS[order.status][language]}
-          </Badge>
+    <div className="space-y-2">
+      {items.map((item, idx) => (
+        <div key={idx} className="group">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-[10px] font-bold text-primary">
+                {idx + 1}
+              </span>
+              <span className="text-sm font-medium">{isArabic ? item.nameAr : item.nameEn}</span>
+            </div>
+            <span className="text-sm font-bold">
+              {metric === "quantity" ? `${item.quantity}×` : formatPrice(item.revenue, language)}
+            </span>
+          </div>
+          <div className="ml-7 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary/50 transition-all duration-500"
+              style={{ width: `${((metric === "quantity" ? item.quantity : item.revenue) / maxVal) * 100}%` }}
+            />
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground truncate mt-0.5">{order.customerName}</p>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-xs text-muted-foreground">{timeAgo(order.createdAt, language)}</p>
-        <p className="text-xs font-medium text-muted-foreground">
-          {order.items.length} {isArabic ? "أصناف" : "items"}
-        </p>
-      </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors shrink-0" />
+      ))}
     </div>
   );
 }
