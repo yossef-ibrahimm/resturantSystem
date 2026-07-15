@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 export default function AdminLayout() {
-  const { t } = useLanguage();
+  const { t, isArabic } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
@@ -124,16 +124,21 @@ export default function AdminLayout() {
             sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"
           )}
           onClick={() => setSidebarOpen(false)}
+          onKeyDown={(e) => { if (e.key === "Escape") setSidebarOpen(false); }}
+          role="button"
+          aria-label={isArabic ? "إغلاق القائمة" : "Close menu"}
+          tabIndex={-1}
         />
         <aside
           className={cn(
             "fixed inset-y-0 start-0 z-50 w-64 flex flex-col border-e border-border bg-card transition-transform lg:hidden",
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           )}
+          onKeyDown={(e) => { if (e.key === "Escape") setSidebarOpen(false); }}
         >
           <div className="flex h-14 items-center justify-between border-b border-border px-5">
             <span className="font-display font-bold">{t.admin.title}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)} aria-label={isArabic ? "إغلاق" : "Close"}>
               <X className="h-4 w-4" />
             </Button>
           </div>

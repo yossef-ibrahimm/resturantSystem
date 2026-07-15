@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "@/i18n";
 import { getMenuItems, getCategories } from "@/lib/api";
 import { useCartStore } from "@/stores/cartStore";
@@ -20,18 +20,20 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    Promise.all([getMenuItems(), getCategories()])
-      .then(([menuItems, cats]) => {
-        setItems(menuItems);
-        setCategories(cats.sort((a, b) => a.sortOrder - b.sortOrder));
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+  const loadData = useCallback(async () => {
+    try {
+      const [menuItems, cats] = await Promise.all([getMenuItems(), getCategories()]);
+      setItems(menuItems);
+      setCategories(cats.sort((a, b) => a.sortOrder - b.sortOrder));
+      setLoading(false);
+      setError(false);
+    } catch {
+      setError(true);
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filteredItems = activeCategory === "all"
     ? items
@@ -67,7 +69,7 @@ export default function MenuPage() {
     return (
       <div className="container py-16 text-center">
         <p className="text-destructive text-lg mb-4">{t.error}</p>
-        <Button onClick={() => window.location.reload()}>{t.retry}</Button>
+        <Button onClick={loadData}>{t.retry}</Button>
       </div>
     );
   }
@@ -115,6 +117,9 @@ export default function MenuPage() {
                   alt={isArabic ? item.nameAr : item.nameEn}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150' fill='%23e5e7eb'%3E%3Crect width='200' height='150'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E";
+                  }}
                 />
                 {!item.available && (
                   <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
@@ -141,6 +146,7 @@ export default function MenuPage() {
                   className="w-full"
                   disabled={!item.available}
                   onClick={() => handleAddToCart(item)}
+                  aria-label={`${isArabic ? "أضف إلى السلة" : "Add to cart"}: ${isArabic ? item.nameAr : item.nameEn}`}
                 >
                   <Plus className="h-4 w-4 me-1" />
                   {t.menu.addToCart}

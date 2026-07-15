@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "@/i18n";
 import { getMenuItems, getCategories, createMenuItem, updateMenuItem, deleteMenuItem, createCategory, deleteCategory } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
@@ -42,19 +42,20 @@ export default function MenuManagement() {
     image: "",
   });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [menuItems, cats] = await Promise.all([getMenuItems(), getCategories()]);
       setItems(menuItems);
       setCategories(cats.sort((a, b) => a.sortOrder - b.sortOrder));
       setLoading(false);
+      setError(false);
     } catch {
       setError(true);
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filteredItems = filterCategory === "all"
     ? items
@@ -81,6 +82,18 @@ export default function MenuManagement() {
   };
 
   const handleSaveItem = async () => {
+    if (!form.nameAr.trim() || !form.nameEn.trim()) {
+      toast.error(isArabic ? "أدخل اسم الطبق بالعربية والإنجليزية" : "Enter item name in both languages");
+      return;
+    }
+    if (!form.price || Number(form.price) <= 0) {
+      toast.error(isArabic ? "أدخل سعراً صالحاً" : "Enter a valid price");
+      return;
+    }
+    if (!form.categoryId) {
+      toast.error(isArabic ? "اختر فئة" : "Select a category");
+      return;
+    }
     const data = {
       nameAr: form.nameAr,
       nameEn: form.nameEn,
@@ -158,7 +171,7 @@ export default function MenuManagement() {
     return (
       <div className="text-center py-16">
         <p className="text-destructive text-lg mb-4">{t.error}</p>
-        <Button onClick={() => window.location.reload()}>{t.retry}</Button>
+        <Button onClick={loadData}>{t.retry}</Button>
       </div>
     );
   }
@@ -275,7 +288,14 @@ export default function MenuManagement() {
         {filteredItems.map((item) => (
           <Card key={item.id}>
             <CardContent className="flex items-center gap-4 p-4">
-              <img src={item.image} alt={isArabic ? item.nameAr : item.nameEn} className="h-16 w-16 rounded object-cover flex-shrink-0" />
+              <img
+                src={item.image}
+                alt={isArabic ? item.nameAr : item.nameEn}
+                className="h-16 w-16 rounded object-cover flex-shrink-0"
+                onError={(e) => {
+                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' fill='%23e5e7eb'%3E%3Crect width='64' height='64'/%3E%3C/svg%3E";
+                }}
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-medium truncate">{isArabic ? item.nameAr : item.nameEn}</p>
@@ -286,10 +306,10 @@ export default function MenuManagement() {
                 <p className="text-sm text-muted-foreground">{formatPrice(item.price, language)}</p>
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
+                <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label={t.admin.menu.editItem}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteItem(item.id)}>
+                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteItem(item.id)} aria-label={t.admin.menu.deleteItem}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -308,7 +328,7 @@ export default function MenuManagement() {
             {categories.map((cat) => (
               <div key={cat.id} className="flex items-center justify-between rounded-lg border p-3">
                 <span className="font-medium">{isArabic ? cat.nameAr : cat.nameEn}</span>
-                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteCategory(cat.id)}>
+                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteCategory(cat.id)} aria-label={t.admin.menu.deleteItem}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

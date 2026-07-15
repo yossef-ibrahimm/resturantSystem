@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "@/i18n";
 import { getOrders } from "@/lib/api";
 import { formatPrice, formatDate, timeAgo } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, STATUS_COLORS } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -20,17 +21,22 @@ export default function OrderHistory() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  useEffect(() => {
-    getOrders()
-      .then((o) => {
-        setOrders([...o].reverse());
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const o = await getOrders();
+      setOrders([...o].reverse());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   const filtered = orders.filter((o) => {
     if (statusFilter !== "all" && o.status !== statusFilter) return false;
@@ -55,7 +61,7 @@ export default function OrderHistory() {
     return (
       <div className="text-center py-16">
         <p className="text-destructive text-lg mb-4">{t.error}</p>
-        <Button onClick={() => window.location.reload()}>{t.retry}</Button>
+        <Button onClick={loadOrders}>{t.retry}</Button>
       </div>
     );
   }
@@ -94,7 +100,15 @@ export default function OrderHistory() {
       ) : (
         <div className="space-y-3">
           {filtered.map((order) => (
-            <Card key={order.id} className="cursor-pointer hover:shadow-card transition-shadow" onClick={() => setSelectedOrder(order)}>
+            <Card
+              key={order.id}
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setSelectedOrder(order)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedOrder(order); } }}
+              tabIndex={0}
+              role="button"
+              aria-label={`${isArabic ? "عرض تفاصيل الطلب" : "View order"} #${order.orderNumber}`}
+            >
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

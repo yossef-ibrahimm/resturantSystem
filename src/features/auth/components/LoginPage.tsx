@@ -11,7 +11,7 @@ import { UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LoginPage() {
-  const { t } = useLanguage();
+  const { t, isArabic } = useLanguage();
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,7 +32,7 @@ export default function LoginPage() {
       const { user, token } = await apiLogin(email, password);
       if (user) {
         setUser(user, token);
-        toast.success(`Welcome, ${user.name}`);
+        toast.success(isArabic ? `مرحباً، ${user.name}` : `Welcome, ${user.name}`);
         if (user.role === "kitchen_staff") {
           navigate("/kitchen");
         } else {
@@ -61,7 +61,7 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive" role="alert">
                 {error}
               </div>
             )}

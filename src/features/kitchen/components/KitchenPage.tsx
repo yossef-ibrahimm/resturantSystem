@@ -32,6 +32,7 @@ function formatElapsed(minutes: number, language: string): string {
 export default function KitchenPage() {
   const { t, isArabic, language } = useLanguage();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -129,7 +130,7 @@ export default function KitchenPage() {
   ];
 
   const handleLogout = () => {
-    useAuthStore.getState().logout();
+    logout();
     navigate("/");
   };
 
@@ -245,7 +246,7 @@ export default function KitchenPage() {
                         —
                       </div>
                     ) : (
-                      col.orders
+                      [...col.orders]
                         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                         .map((order) => (
                           <OrderCard

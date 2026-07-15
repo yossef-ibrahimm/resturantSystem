@@ -70,10 +70,11 @@ const Navbar = () => {
             size="icon"
             className="relative h-9 w-9"
             onClick={() => navigate("/checkout")}
+            aria-label={`${isArabic ? "سلة المشتريات" : "Shopping cart"}: ${itemCount} ${isArabic ? "أصناف" : "items"}`}
           >
             <ShoppingCart className="h-4 w-4" />
             {itemCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white" aria-hidden="true">
                 {itemCount}
               </span>
             )}
@@ -94,7 +95,7 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
-          <Button variant="ghost" size="icon" onClick={toggleLanguage} className="h-9 w-9">
+          <Button variant="ghost" size="icon" onClick={toggleLanguage} className="h-9 w-9" aria-label={isArabic ? "تغيير اللغة" : "Toggle language"}>
             <Globe className="h-4 w-4" />
           </Button>
           <Button
@@ -102,10 +103,11 @@ const Navbar = () => {
             size="icon"
             className="relative h-9 w-9"
             onClick={() => navigate("/checkout")}
+            aria-label={`${isArabic ? "سلة المشتريات" : "Shopping cart"}: ${itemCount} ${isArabic ? "أصناف" : "items"}`}
           >
             <ShoppingCart className="h-4 w-4" />
             {itemCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white" aria-hidden="true">
                 {itemCount}
               </span>
             )}
@@ -124,10 +126,10 @@ const Navbar = () => {
 
       <div
         className={cn(
-          "overflow-hidden border-t border-border/60 bg-background md:hidden",
+          "overflow-hidden border-t border-border/60 bg-background md:hidden transition-[max-height] duration-300 ease-in-out",
           open ? "max-h-96" : "max-h-0"
         )}
-        style={{ transition: "max-height 0.3s ease" }}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
       >
         <div className="container flex flex-col gap-1 py-4">
           {publicLinks.map((l) => (

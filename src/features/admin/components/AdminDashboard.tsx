@@ -19,12 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  ResponsiveContainer, Cell, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
 import {
   DollarSign, ShoppingCart, TrendingUp, TrendingDown, UtensilsCrossed,
-  Truck, RefreshCw, AlertTriangle, Clock, ArrowUpRight, BarChart3, Flame,
+  RefreshCw, AlertTriangle, Clock, BarChart3, Flame,
   Minus,
 } from "lucide-react";
 import type { ReportSummary, RevenueOverTime, OrdersByStatus, TopItemsReport, PeakHoursReport, UnavailableItem, TopItem } from "@/lib/report-types";

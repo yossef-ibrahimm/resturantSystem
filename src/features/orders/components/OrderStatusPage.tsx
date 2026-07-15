@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n";
 import { getOrderByNumber } from "@/lib/api";
@@ -20,6 +20,12 @@ export default function OrderStatusPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    if (initialOrder.trim()) {
+      handleSearch();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = async () => {
     if (!orderNumber.trim()) return;
@@ -56,6 +62,7 @@ export default function OrderStatusPage() {
           placeholder={t.orderStatus.enterOrderNumber}
           className="flex-1"
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          aria-label={t.orderStatus.enterOrderNumber}
         />
         <Button onClick={handleSearch} disabled={loading}>
           <Search className="h-4 w-4 me-2" />

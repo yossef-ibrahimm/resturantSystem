@@ -1,6 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { CURRENCY } from "./constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -37,8 +36,4 @@ export function timeAgo(dateString: string, locale: "ar" | "en" = "ar"): string 
   }
   const diffD = Math.floor(diffH / 24);
   return locale === "ar" ? `منذ ${diffD} يوم` : `${diffD}d ago`;
-}
-
-export function generateOrderNumber(): string {
-  return String(1000 + Math.floor(Math.random() * 9000));
 }

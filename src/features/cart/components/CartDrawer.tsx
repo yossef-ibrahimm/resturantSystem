@@ -3,7 +3,6 @@ import { useLanguage } from "@/i18n";
 import { useCartStore } from "@/stores/cartStore";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
@@ -88,6 +87,7 @@ export default function CartDrawer({ open, onOpenChange, trigger }: CartDrawerPr
                             variant="outline"
                             size="icon"
                             className="h-7 w-7"
+                            aria-label={isArabic ? "تقليل الكمية" : "Decrease quantity"}
                             onClick={() =>
                               updateQuantity(
                                 item.menuItem.id,
@@ -98,11 +98,12 @@ export default function CartDrawer({ open, onOpenChange, trigger }: CartDrawerPr
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
-                          <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                          <span className="text-sm font-medium w-6 text-center" aria-label={`${isArabic ? "الكمية" : "Quantity"}: ${item.quantity}`}>{item.quantity}</span>
                           <Button
                             variant="outline"
                             size="icon"
                             className="h-7 w-7"
+                            aria-label={isArabic ? "زيادة الكمية" : "Increase quantity"}
                             onClick={() =>
                               updateQuantity(
                                 item.menuItem.id,
@@ -117,6 +118,7 @@ export default function CartDrawer({ open, onOpenChange, trigger }: CartDrawerPr
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 ms-auto text-destructive"
+                            aria-label={isArabic ? "حذف من السلة" : "Remove from cart"}
                             onClick={() => removeItem(item.menuItem.id, item.variant?.id)}
                           >
                             <Trash2 className="h-3 w-3" />
