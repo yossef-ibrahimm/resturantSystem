@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
-  base: process.env.GITHUB_ACTIONS ? "/tasty-table-studio/" : "/",
+  base: process.env.GITHUB_ACTIONS ? "/resturant_sys/" : "/",
   server: {
     host: "::",
     port: 8080,
