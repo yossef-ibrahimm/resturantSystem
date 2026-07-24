@@ -23,6 +23,7 @@ const ar = {
     orderStatus: "حالة الطلب",
     admin: "الإدارة",
     kitchen: "المطبخ",
+    waiter: "الجرسون",
     login: "تسجيل الدخول",
     logout: "تسجيل الخروج",
     cart: "سلة التسوق",
@@ -98,6 +99,9 @@ const ar = {
     total: "الإجمالي",
     notFound: "لم يتم العثور على الطلب",
     enterNumberPrompt: "أدخل رقم الطلب للتحقق من حالته",
+    requestBill: "طلب الفاتورة",
+    billRequested: "تم طلب الفاتورة",
+    billRequestedSuccess: "تم إرسال طلب الفاتورة للجرسون",
   },
 
   // Admin
@@ -212,6 +216,29 @@ const ar = {
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       loginBtn: "دخول المطبخ",
+      invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    },
+  },
+
+  // Waiter
+  waiter: {
+    title: "شاشة الجرسون",
+    subtitle: "التوصيل وتحصيل الفواتير",
+    readyForDelivery: "جاهز للتوصيل",
+    billRequested: "تم طلب الفاتورة",
+    markAsDelivered: "تم التسليم",
+    acknowledgeBill: "تم تحصيل الفاتورة",
+    noOrders: "لا توجد طلبات في الانتظار",
+    noBillRequests: "لا توجد طلبات فاتورة",
+    table: "طاولة",
+    takeaway: "تيك أواي",
+    total: "الإجمالي",
+    login: {
+      title: "دخول الجرسون",
+      subtitle: "سجّل الدخول لإدارة التوصيل",
+      email: "البريد الإلكتروني",
+      password: "كلمة المرور",
+      loginBtn: "دخول شاشة الجرسون",
       invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
     },
   },

@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Body, Param, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { OrdersService } from "./orders.service";
 import { Public } from "../common/guards/public.decorator";
+import { Roles } from "../common/decorators/roles.decorator";
+import { RolesGuard } from "../common/guards/roles.guard";
 import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, Min, IsIn } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -28,10 +31,11 @@ class UpdateStatusDto {
 }
 
 @Controller("orders")
+@UseGuards(RolesGuard)
 export class OrdersController {
   constructor(private ordersService: OrdersService) {}
 
-  @Public()
+  @Roles("admin", "kitchen_staff", "waiter")
   @Get()
   findAll() {
     return this.ordersService.findAll();
@@ -43,13 +47,14 @@ export class OrdersController {
     return this.ordersService.findByNumber(orderNumber);
   }
 
-  @Public()
+  @Roles("admin", "kitchen_staff", "waiter")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.ordersService.findById(id);
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post()
   create(@Body() dto: CreateOrderDto) {
     return this.ordersService.create({
@@ -58,9 +63,22 @@ export class OrdersController {
     });
   }
 
-  @Public()
+  @Roles("admin", "kitchen_staff", "waiter")
   @Patch(":id/status")
   updateStatus(@Param("id") id: string, @Body() dto: UpdateStatusDto) {
     return this.ordersService.updateStatus(id, dto.status);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Patch("by-number/:orderNumber/request-bill")
+  requestBillByNumber(@Param("orderNumber") orderNumber: string) {
+    return this.ordersService.requestBillByNumber(orderNumber);
+  }
+
+  @Roles("admin", "waiter")
+  @Patch(":id/acknowledge-bill")
+  acknowledgeBill(@Param("id") id: string) {
+    return this.ordersService.acknowledgeBill(id);
   }
 }

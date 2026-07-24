@@ -1,41 +1,61 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n";
-import { getOrderByNumber } from "@/lib/api";
-import { formatPrice, formatDate, timeAgo } from "@/lib/utils";
+import { getOrderByNumber, requestBill } from "@/lib/api";
+import { formatPrice, timeAgo } from "@/lib/utils";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, STATUS_COLORS } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useActiveOrderStore } from "@/stores/activeOrderStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Search, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Package, ReceiptText, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 import type { Order } from "@/lib/types";
 
 export default function OrderStatusPage() {
   const { t, isArabic, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialOrder = searchParams.get("order") || "";
-  const [orderNumber, setOrderNumber] = useState(initialOrder);
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [billLoading, setBillLoading] = useState(false);
+  const { updateStatus, clearOrder } = useActiveOrderStore();
 
   useEffect(() => {
-    if (initialOrder.trim()) {
-      handleSearch();
-    }
+    if (!initialOrder.trim()) return;
+    fetchOrder(initialOrder.trim());
+
+    const interval = setInterval(() => {
+      const current = searchParams.get("order");
+      if (current) fetchOrder(current);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = async () => {
-    if (!orderNumber.trim()) return;
+  useEffect(() => {
+    if (order && order.paymentStatus === "paid") {
+      clearOrder();
+      setOrder(null);
+    }
+  }, [order?.paymentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchOrder = async (num: string) => {
     setLoading(true);
     setNotFound(false);
     try {
-      const found = await getOrderByNumber(orderNumber.trim());
+      const found = await getOrderByNumber(num);
       if (found) {
+        if (found.paymentStatus === "paid") {
+          setOrder(null);
+          clearOrder();
+          return;
+        }
         setOrder(found);
         setSearchParams({ order: found.orderNumber });
+        updateStatus(found.status);
       } else {
         setOrder(null);
         setNotFound(true);
@@ -49,26 +69,26 @@ export default function OrderStatusPage() {
 
   const currentStep = order ? ORDER_STATUS_FLOW.indexOf(order.status) : 0;
 
+  const handleRequestBill = async () => {
+    if (!order) return;
+    setBillLoading(true);
+    try {
+      const updated = await requestBill(order.orderNumber);
+      setOrder(updated);
+      toast.success(isArabic ? t.orderStatus.billRequestedSuccess : t.orderStatus.billRequestedSuccess);
+    } catch {
+      toast.error(isArabic ? "فشل إرسال الطلب" : "Failed to send request");
+    } finally {
+      setBillLoading(false);
+    }
+  };
+
+  const canRequestBill = order && order.paymentStatus === "unpaid" && !order.billRequested;
+
   return (
     <div className="container py-8 max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">{t.orderStatus.title}</h1>
       <p className="text-muted-foreground mb-8">{t.orderStatus.enterNumberPrompt}</p>
-
-      {/* Search */}
-      <div className="flex gap-2 mb-8">
-        <Input
-          value={orderNumber}
-          onChange={(e) => setOrderNumber(e.target.value)}
-          placeholder={t.orderStatus.enterOrderNumber}
-          className="flex-1"
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          aria-label={t.orderStatus.enterOrderNumber}
-        />
-        <Button onClick={handleSearch} disabled={loading}>
-          <Search className="h-4 w-4 me-2" />
-          {t.orderStatus.track}
-        </Button>
-      </div>
 
       {/* Not found */}
       {notFound && (
@@ -191,6 +211,29 @@ export default function OrderStatusPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Request Bill Button */}
+          {canRequestBill && (
+            <Button
+              size="lg"
+              className="w-full gap-2"
+              variant="outline"
+              onClick={handleRequestBill}
+              disabled={billLoading}
+            >
+              <ReceiptText className="h-5 w-5" />
+              {t.orderStatus.requestBill}
+            </Button>
+          )}
+
+          {order.billRequested && (
+            <Card className="border-orange-200 bg-orange-500/5">
+              <CardContent className="py-4 flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-orange-600" />
+                <p className="font-semibold text-orange-700">{t.orderStatus.billRequested}</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useLanguage } from "@/i18n";
 import { useCartStore } from "@/stores/cartStore";
+import { useActiveOrderStore } from "@/stores/activeOrderStore";
 import { createOrder } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,12 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Minus, Plus, Trash2, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Minus, Plus, Trash2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CheckoutPage() {
   const { t, isArabic, language } = useLanguage();
   const { items, total, updateQuantity, removeItem, clearCart } = useCartStore();
+  const setOrder = useActiveOrderStore((s) => s.setOrder);
   const navigate = useNavigate();
 
   const [customerName, setCustomerName] = useState("");
@@ -25,7 +27,6 @@ export default function CheckoutPage() {
   const [tableNumber, setTableNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [orderResult, setOrderResult] = useState<{ orderNumber: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -57,44 +58,15 @@ export default function CheckoutPage() {
         })),
       });
       clearCart();
-      setOrderResult({ orderNumber: order.orderNumber });
       toast.success(t.checkout.orderPlaced);
+      setOrder(order.orderNumber, order.status);
+      navigate(`/order-status?order=${order.orderNumber}`);
     } catch {
       toast.error(t.error);
     } finally {
       setSubmitting(false);
     }
   };
-
-  // Order confirmation
-  if (orderResult) {
-    return (
-      <div className="container py-16 max-w-lg mx-auto text-center">
-        <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">{t.checkout.orderPlaced}</h1>
-        <p className="text-muted-foreground mb-6">{t.checkout.orderStatus}</p>
-        <Card>
-          <CardContent className="py-8">
-            <p className="text-sm text-muted-foreground mb-1">{t.checkout.orderNumber}</p>
-            <p className="text-4xl font-bold text-accent mb-4">#{orderResult.orderNumber}</p>
-            <p className="text-sm text-muted-foreground">
-              {t.checkout.estimatedTime}: 15-25 {t.checkout.minutes}
-            </p>
-          </CardContent>
-        </Card>
-        <div className="flex gap-3 mt-6 justify-center">
-          <Button variant="outline" asChild>
-            <Link to={`/order-status?order=${orderResult.orderNumber}`}>
-              {t.checkout.checkStatus}
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link to="/">{t.cart.continueShopping}</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (

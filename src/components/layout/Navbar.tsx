@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Menu, X, UtensilsCrossed, ShoppingCart, Globe } from "lucide-react";
+import { Menu, X, UtensilsCrossed, ShoppingCart, Globe, Package } from "lucide-react";
 import { useAuthStore, selectIsAuthenticated } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
+import { useActiveOrderStore } from "@/stores/activeOrderStore";
 import { useLanguage } from "@/i18n";
+import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +15,7 @@ const Navbar = () => {
   const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const { itemCount } = useCartStore();
+  const { orderNumber: activeOrderNumber, status: activeOrderStatus, clearOrder } = useActiveOrderStore();
   const { t, toggleLanguage, isArabic } = useLanguage();
   const navigate = useNavigate();
 
@@ -64,6 +67,23 @@ const Navbar = () => {
           >
             <Globe className="h-4 w-4" />
           </Button>
+
+          {activeOrderNumber && activeOrderStatus && (
+            <Link
+              to={`/order-status?order=${activeOrderNumber}`}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-secondary/60",
+                activeOrderStatus === "completed"
+                  ? "border-green-500/40 text-green-600"
+                  : "border-accent/40 text-accent"
+              )}
+            >
+              <Package className="h-3 w-3" />
+              <span>#{activeOrderNumber}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>{ORDER_STATUS_LABELS[activeOrderStatus][isArabic ? "ar" : "en"]}</span>
+            </Link>
+          )}
 
           <Button
             variant="ghost"
@@ -148,6 +168,23 @@ const Navbar = () => {
               {l.label}
             </NavLink>
           ))}
+          {activeOrderNumber && activeOrderStatus && (
+            <Link
+              to={`/order-status?order=${activeOrderNumber}`}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                activeOrderStatus === "completed"
+                  ? "bg-green-500/10 text-green-600"
+                  : "bg-accent/10 text-accent"
+              )}
+            >
+              <Package className="h-3.5 w-3.5" />
+              <span>#{activeOrderNumber}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>{ORDER_STATUS_LABELS[activeOrderStatus][isArabic ? "ar" : "en"]}</span>
+            </Link>
+          )}
           <div className="mt-2 border-t border-border pt-3">
             {isAuthenticated ? (
               <Button variant="outline" className="w-full" onClick={handleLogout}>

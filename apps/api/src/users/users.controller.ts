@@ -7,7 +7,7 @@ import { IsString, IsEmail, IsIn, IsOptional, MinLength } from "class-validator"
 class CreateUserDto {
   @IsEmail() email: string;
   @IsString() name: string;
-  @IsString() @IsIn(["admin", "kitchen_staff"]) role: string;
+  @IsString() @IsIn(["admin", "kitchen_staff", "waiter"]) role: string;
   @IsString() @MinLength(6) @IsOptional() password?: string;
 }
 
@@ -26,7 +26,7 @@ export class UsersController {
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create({
       ...dto,
-      role: dto.role as "admin" | "kitchen_staff",
+      role: dto.role as "admin" | "kitchen_staff" | "waiter",
     });
   }
 

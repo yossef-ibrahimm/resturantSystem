@@ -1,4 +1,8 @@
-name: Deploy to GitHub Pages
+# Deploy frontend to GitHub Pages
+# NOTE: Requires the NestJS API backend to be running separately
+# Set VITE_API_URL in GitHub repo secrets/actions to point to your API
+
+name: Deploy Frontend to GitHub Pages
 
 on:
   push:
@@ -34,6 +38,7 @@ jobs:
         run: npm run build
         env:
           GITHUB_ACTIONS: true
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://localhost:3001/api' }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export function useDateRange(): [DateRange, (range: DateRange) => void] {
   const fromStr = searchParams.get("from");
   const toStr = searchParams.get("to");
 
-  const range: DateRange = (() => {
+  const range: DateRange = useMemo(() => {
     if (fromStr && toStr) {
       return {
         from: new Date(fromStr),
@@ -91,7 +91,7 @@ export function useDateRange(): [DateRange, (range: DateRange) => void] {
     }
     const p = getPresetRange(preset);
     return { ...p, preset };
-  })();
+  }, [fromStr, toStr, preset]);
 
   const setRange = useCallback(
     (r: DateRange) => {

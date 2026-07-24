@@ -112,7 +112,7 @@ export default function AdminLayout() {
   return (
     <div className="flex min-h-screen">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col border-e border-border bg-card/50">
+      <aside className="hidden lg:flex w-64 flex-col border-e border-border bg-card/50" style={{ maxHeight: "99vh" }}>
         {sidebarContent}
       </aside>
 

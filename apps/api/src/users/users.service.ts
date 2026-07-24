@@ -13,11 +13,11 @@ export class UsersService {
     });
   }
 
-  async create(data: { email: string; name: string; role: "admin" | "kitchen_staff"; password?: string }) {
+  async create(data: { email: string; name: string; role: "admin" | "kitchen_staff" | "waiter"; password?: string }) {
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
     if (existing) throw new ConflictException("Email already exists");
 
-    const passwordHash = await bcrypt.hash(data.password || "password123", 10);
+    const passwordHash = await bcrypt.hash(data.password || "dev-tastytable-2024", 10);
     const user = await this.prisma.user.create({
       data: {
         email: data.email,

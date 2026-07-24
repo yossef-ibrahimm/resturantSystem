@@ -23,6 +23,7 @@ const en = {
     orderStatus: "Order Status",
     admin: "Admin",
     kitchen: "Kitchen",
+    waiter: "Waiter",
     login: "Login",
     logout: "Logout",
     cart: "Cart",
@@ -98,6 +99,9 @@ const en = {
     total: "Total",
     notFound: "Order not found",
     enterNumberPrompt: "Enter your order number to check its status",
+    requestBill: "Request Bill",
+    billRequested: "Bill Requested",
+    billRequestedSuccess: "Bill request sent to the waiter",
   },
 
   // Admin
@@ -212,6 +216,29 @@ const en = {
       email: "Email",
       password: "Password",
       loginBtn: "Enter Kitchen",
+      invalidCredentials: "Invalid email or password",
+    },
+  },
+
+  // Waiter
+  waiter: {
+    title: "Waiter Screen",
+    subtitle: "Delivery & Bill Collection",
+    readyForDelivery: "Ready for Delivery",
+    billRequested: "Bill Requested",
+    markAsDelivered: "Mark as Delivered",
+    acknowledgeBill: "Bill Collected",
+    noOrders: "No orders waiting",
+    noBillRequests: "No bill requests",
+    table: "Table",
+    takeaway: "Takeaway",
+    total: "Total",
+    login: {
+      title: "Waiter Login",
+      subtitle: "Sign in to manage deliveries",
+      email: "Email",
+      password: "Password",
+      loginBtn: "Enter Waiter View",
       invalidCredentials: "Invalid email or password",
     },
   },

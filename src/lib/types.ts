@@ -28,7 +28,7 @@ export interface MenuItemVariant {
 export type OrderStatus = "received" | "preparing" | "ready" | "completed";
 export type OrderType = "dine_in" | "takeaway";
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
-export type UserRole = "admin" | "kitchen_staff";
+export type UserRole = "admin" | "kitchen_staff" | "waiter";
 
 export interface OrderItem {
   id: string;
@@ -52,6 +52,7 @@ export interface Order {
   items: OrderItem[];
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  billRequested?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,3 +1,8 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
 # Logs
 logs
 *.log
@@ -22,3 +27,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Prisma
+*.db
+*.db-journal
+
+# OS
+Thumbs.db
+ehthumbs.db

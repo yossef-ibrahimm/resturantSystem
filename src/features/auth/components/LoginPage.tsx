@@ -35,6 +35,8 @@ export default function LoginPage() {
         toast.success(isArabic ? `مرحباً، ${user.name}` : `Welcome, ${user.name}`);
         if (user.role === "kitchen_staff") {
           navigate("/kitchen");
+        } else if (user.role === "waiter") {
+          navigate("/waiter");
         } else {
           navigate(from);
         }
@@ -72,7 +74,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@tastytable.com"
+                placeholder="email@example.com"
                 required
               />
             </div>

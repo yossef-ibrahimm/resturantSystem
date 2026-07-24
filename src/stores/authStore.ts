@@ -55,4 +55,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // Derived selectors (always computed from current state)
 export const selectIsAdmin = (state: AuthState) => state.user?.role === "admin";
 export const selectIsKitchen = (state: AuthState) => state.user?.role === "kitchen_staff";
+export const selectIsWaiter = (state: AuthState) => state.user?.role === "waiter";
 export const selectIsAuthenticated = (state: AuthState) => state.user !== null;

@@ -1,42 +1,16 @@
-import { useLocation, Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
-import { useLanguage } from "@/i18n";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChefHat, ArrowLeft } from "lucide-react";
+import { useLanguage } from "@/i18n";
 
-const NotFound = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { t, isArabic } = useLanguage();
-
-  useEffect(() => {
-    // Production: no console.error
-  }, [location.pathname]);
-
+export default function NotFound() {
+  const { t } = useLanguage();
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="text-center space-y-6">
-        <div className="bg-muted/50 rounded-full p-6 mx-auto w-fit">
-          <ChefHat className="h-12 w-12 text-muted-foreground/40" />
-        </div>
-        <div>
-          <h1 className="text-6xl font-bold text-primary mb-2">404</h1>
-          <p className="text-xl text-muted-foreground">
-            {isArabic ? "عذراً! الصفحة غير موجودة" : "Oops! Page not found"}
-          </p>
-        </div>
-        <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
-            <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
-            {isArabic ? "العودة" : "Go Back"}
-          </Button>
-          <Button asChild>
-            <Link to="/">{isArabic ? "الصفحة الرئيسية" : "Return to Home"}</Link>
-          </Button>
-        </div>
-      </div>
-    </main>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+      <h1 className="text-6xl font-bold text-muted-foreground/30">404</h1>
+      <p className="text-lg text-muted-foreground">{t.notFound || "Page not found"}</p>
+      <Button asChild>
+        <Link to="/">{t.nav?.menu || "Back to menu"}</Link>
+      </Button>
+    </div>
   );
-};
-
-export default NotFound;
+}

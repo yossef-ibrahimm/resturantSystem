@@ -1,24 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/i18n";
-import { getMenuItems, getCategories } from "@/lib/api";
+import { getMenuItems, getCategories, getOrderByNumber, requestBill } from "@/lib/api";
 import { useCartStore } from "@/stores/cartStore";
+import { useActiveOrderStore } from "@/stores/activeOrderStore";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart, ReceiptText, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { MenuItem, Category } from "@/lib/types";
+import type { MenuItem, Category, Order } from "@/lib/types";
 
 export default function MenuPage() {
   const { t, isArabic, language } = useLanguage();
   const { addItem } = useCartStore();
+  const { orderNumber } = useActiveOrderStore();
+  const navigate = useNavigate();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [billLoading, setBillLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -34,6 +40,42 @@ export default function MenuPage() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!orderNumber) {
+      setActiveOrder(null);
+      return;
+    }
+    const fetchActiveOrder = async () => {
+      try {
+        const order = await getOrderByNumber(orderNumber);
+        if (order.paymentStatus === "paid") {
+          setActiveOrder(null);
+          return;
+        }
+        setActiveOrder(order);
+      } catch {
+        setActiveOrder(null);
+      }
+    };
+    fetchActiveOrder();
+    const interval = setInterval(fetchActiveOrder, 5000);
+    return () => clearInterval(interval);
+  }, [orderNumber]);
+
+  const handleRequestBill = async () => {
+    if (!activeOrder) return;
+    setBillLoading(true);
+    try {
+      const updated = await requestBill(activeOrder.orderNumber);
+      setActiveOrder(updated);
+      toast.success(isArabic ? t.orderStatus.billRequestedSuccess : t.orderStatus.billRequestedSuccess);
+    } catch {
+      toast.error(isArabic ? "فشل إرسال الطلب" : "Failed to send request");
+    } finally {
+      setBillLoading(false);
+    }
+  };
 
   const filteredItems = activeCategory === "all"
     ? items
@@ -154,6 +196,30 @@ export default function MenuPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Request Bill FAB */}
+      {activeOrder && activeOrder.paymentStatus === "unpaid" && !activeOrder.billRequested && (
+        <div className="fixed bottom-6 end-6 z-50">
+          <Button
+            size="lg"
+            className="gap-2 rounded-full shadow-lg h-14 px-6"
+            onClick={handleRequestBill}
+            disabled={billLoading}
+          >
+            <ReceiptText className="h-5 w-5" />
+            {t.orderStatus.requestBill}
+          </Button>
+        </div>
+      )}
+
+      {activeOrder && activeOrder.billRequested && (
+        <div className="fixed bottom-6 end-6 z-50">
+          <div className="flex items-center gap-2 bg-orange-500 text-white rounded-full px-5 py-3 shadow-lg">
+            <CheckCircle className="h-5 w-5" />
+            <span className="font-semibold text-sm">{t.orderStatus.billRequested}</span>
+          </div>
         </div>
       )}
     </div>

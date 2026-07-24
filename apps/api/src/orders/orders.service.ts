@@ -96,6 +96,51 @@ export class OrdersService {
     return order;
   }
 
+  async requestBill(id: string) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundException("Order not found");
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: { billRequested: true },
+      include: { items: true },
+    });
+
+    this.wsGateway.broadcastOrderUpdate(updated);
+
+    return updated;
+  }
+
+  async requestBillByNumber(orderNumber: string) {
+    const order = await this.prisma.order.findUnique({ where: { orderNumber } });
+    if (!order) throw new NotFoundException("Order not found");
+
+    const updated = await this.prisma.order.update({
+      where: { orderNumber },
+      data: { billRequested: true },
+      include: { items: true },
+    });
+
+    this.wsGateway.broadcastOrderUpdate(updated);
+
+    return updated;
+  }
+
+  async acknowledgeBill(id: string) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundException("Order not found");
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: { billRequested: false, paymentStatus: "paid" },
+      include: { items: true },
+    });
+
+    this.wsGateway.broadcastOrderUpdate(updated);
+
+    return updated;
+  }
+
   async updateStatus(id: string, status: string) {
     const validStatuses = ["received", "preparing", "ready", "completed"];
     if (!validStatuses.includes(status)) {
@@ -115,7 +160,7 @@ export class OrdersService {
 
     const updated = await this.prisma.order.update({
       where: { id },
-      data: { status: status as any },
+      data: { status },
       include: { items: true },
     });
 
