@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -19,20 +19,27 @@ export class MenuService {
   }
 
   async deleteCategory(id: string) {
+    const itemCount = await this.prisma.menuItem.count({ where: { categoryId: id } });
+    if (itemCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete category: it still contains ${itemCount} menu item(s). Delete or move the items first.`
+      );
+    }
     return this.prisma.category.delete({ where: { id } });
   }
 
   // Menu Items
   async findAllMenuItems() {
     return this.prisma.menuItem.findMany({
+      where: { deletedAt: null },
       include: { variants: true },
       orderBy: { createdAt: "asc" },
     });
   }
 
   async findMenuItem(id: string) {
-    return this.prisma.menuItem.findUnique({
-      where: { id },
+    return this.prisma.menuItem.findFirst({
+      where: { id, deletedAt: null },
       include: { variants: true },
     });
   }
@@ -71,6 +78,10 @@ export class MenuService {
   }
 
   async deleteMenuItem(id: string) {
-    return this.prisma.menuItem.delete({ where: { id } });
+    return this.prisma.menuItem.update({
+      where: { id },
+      data: { deletedAt: new Date(), available: false },
+      include: { variants: true },
+    });
   }
 }

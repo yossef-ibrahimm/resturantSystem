@@ -34,7 +34,7 @@ model Category {
 model MenuItem {
   id            String           @id @default(uuid())
   categoryId    String
-  category      Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category      Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   nameAr        String
   nameEn        String
   descriptionAr String           @default("")
@@ -42,6 +42,7 @@ model MenuItem {
   price         Float
   image         String           @default("")
   available     Boolean          @default(true)
+  deletedAt     DateTime?
   variants      MenuItemVariant[]
   orderItems    OrderItem[]
   createdAt     DateTime         @default(now())
@@ -49,6 +50,7 @@ model MenuItem {
 
   @@index([categoryId])
   @@index([available])
+  @@index([deletedAt])
 }
 
 model MenuItemVariant {
