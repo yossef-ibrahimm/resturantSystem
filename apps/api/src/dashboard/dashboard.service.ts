@@ -14,10 +14,12 @@ export class DashboardService {
       include: { items: true },
     });
 
-    const todayRevenue = todayOrders.reduce(
-      (sum, order) => sum + order.items.reduce((s, item) => s + item.unitPrice * item.quantity, 0),
-      0
-    );
+    const todayRevenue = todayOrders
+      .filter((o) => o.paymentStatus === "paid")
+      .reduce(
+        (sum, order) => sum + order.items.reduce((s, item) => s + item.unitPrice * item.quantity, 0),
+        0
+      );
 
     // Top items (all time)
     const allOrders = await this.prisma.order.findMany({ include: { items: true } });

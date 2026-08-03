@@ -56,7 +56,7 @@ export class ReportsService {
     const calcRevenue = (orders: typeof currentOrders) =>
       round2(
         orders
-          .filter((o) => o.status !== "cancelled")
+          .filter((o) => o.paymentStatus === "paid")
           .reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0), 0)
       );
 
@@ -64,8 +64,10 @@ export class ReportsService {
     const prevRevenue = calcRevenue(previousOrders);
     const orderCount = currentOrders.length;
     const prevOrderCount = previousOrders.length;
-    const avgValue = orderCount > 0 ? round2(revenue / orderCount) : 0;
-    const prevAvgValue = prevOrderCount > 0 ? round2(prevRevenue / prevOrderCount) : 0;
+    const paidCount = currentOrders.filter((o) => o.paymentStatus === "paid").length;
+    const prevPaidCount = previousOrders.filter((o) => o.paymentStatus === "paid").length;
+    const avgValue = paidCount > 0 ? round2(revenue / paidCount) : 0;
+    const prevAvgValue = prevPaidCount > 0 ? round2(prevRevenue / prevPaidCount) : 0;
 
     const dineIn = currentOrders.filter((o) => o.orderType === "dine_in").length;
     const takeaway = currentOrders.filter((o) => o.orderType === "takeaway").length;
@@ -94,7 +96,7 @@ export class ReportsService {
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
     const orders = await this.prisma.order.findMany({
-      where: { createdAt: { gte: start, lte: end }, status: { not: "cancelled" } },
+      where: { createdAt: { gte: start, lte: end }, paymentStatus: "paid" },
       include: { items: true },
     });
 
