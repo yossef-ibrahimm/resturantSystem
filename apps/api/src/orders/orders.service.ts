@@ -57,37 +57,40 @@ export class OrdersService {
       throw new BadRequestException("Table number is required for dine-in orders");
     }
 
-    // Generate order number
-    const lastOrder = await this.prisma.order.findFirst({
-      orderBy: { orderNumber: "desc" },
-    });
-    const orderNumber = lastOrder
-      ? String(parseInt(lastOrder.orderNumber) + 1)
-      : "1001";
+    // Generate order number atomically via a single-row counter.
+    // UPDATE ... SET value = value + 1 is atomic at the DB level, so
+    // concurrent order creations can never receive the same number.
+    const order = await this.prisma.$transaction(async (tx) => {
+      const counter = await tx.orderCounter.upsert({
+        where: { id: "singleton" },
+        update: { value: { increment: 1 } },
+        create: { id: "singleton", value: 1001 },
+      });
 
-    const order = await this.prisma.order.create({
-      data: {
-        orderNumber,
-        customerName: data.customerName,
-        phone: data.phone,
-        orderType: data.orderType,
-        tableNumber: data.tableNumber,
-        notes: data.notes,
-        status: "received",
-        paymentStatus: "unpaid",
-        items: {
-          create: data.items.map((item) => ({
-            menuItemId: item.menuItemId,
-            nameAr: item.nameAr,
-            nameEn: item.nameEn,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            variant: item.variant,
-            notes: item.notes,
-          })),
+      return tx.order.create({
+        data: {
+          orderNumber: String(counter.value),
+          customerName: data.customerName,
+          phone: data.phone,
+          orderType: data.orderType,
+          tableNumber: data.tableNumber,
+          notes: data.notes,
+          status: "received",
+          paymentStatus: "unpaid",
+          items: {
+            create: data.items.map((item) => ({
+              menuItemId: item.menuItemId,
+              nameAr: item.nameAr,
+              nameEn: item.nameEn,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              variant: item.variant,
+              notes: item.notes,
+            })),
+          },
         },
-      },
-      include: { items: true },
+        include: { items: true },
+      });
     });
 
     // Broadcast to kitchen

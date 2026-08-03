@@ -84,6 +84,11 @@ model Order {
   @@index([paymentStatus, billRequested])
 }
 
+model OrderCounter {
+  id    String @id
+  value Int    @default(0)
+}
+
 model OrderItem {
   id         String   @id @default(uuid())
   orderId    String
