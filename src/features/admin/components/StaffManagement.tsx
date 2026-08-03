@@ -22,7 +22,7 @@ export default function StaffManagement() {
   const [error, setError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formError, setFormError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", role: "kitchen_staff" as "admin" | "kitchen_staff" });
+  const [form, setForm] = useState({ name: "", email: "", role: "kitchen_staff" as "admin" | "kitchen_staff" | "waiter" });
 
   const loadUsers = useCallback(async () => {
     try {
@@ -128,11 +128,12 @@ export default function StaffManagement() {
               </div>
               <div className="space-y-2">
                 <Label>{t.admin.staff.role}</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as "admin" | "kitchen_staff" })}>
+                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as "admin" | "kitchen_staff" | "waiter" })}>
                   <SelectTrigger aria-label={t.admin.staff.role}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">{isArabic ? "مدير" : "Admin"}</SelectItem>
                     <SelectItem value="kitchen_staff">{isArabic ? "موظف مطبخ" : "Kitchen Staff"}</SelectItem>
+                    <SelectItem value="waiter">{isArabic ? "جرسون" : "Waiter"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -160,7 +161,11 @@ export default function StaffManagement() {
                       {user.active ? t.admin.staff.active : t.admin.staff.inactive}
                     </Badge>
                     <Badge variant="outline">
-                      {user.role === "admin" ? (isArabic ? "مدير" : "Admin") : (isArabic ? "مطبخ" : "Kitchen")}
+                      {user.role === "admin"
+                        ? (isArabic ? "مدير" : "Admin")
+                        : user.role === "waiter"
+                          ? (isArabic ? "جرسون" : "Waiter")
+                          : (isArabic ? "مطبخ" : "Kitchen")}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{user.email}</p>

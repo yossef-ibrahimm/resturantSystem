@@ -17,6 +17,7 @@ export default function MenuPage() {
   const { t, isArabic, language } = useLanguage();
   const { addItem } = useCartStore();
   const { orderNumber } = useActiveOrderStore();
+  const clearOrder = useActiveOrderStore((s) => s.clearOrder);
   const navigate = useNavigate();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -51,6 +52,7 @@ export default function MenuPage() {
         const order = await getOrderByNumber(orderNumber);
         if (order.paymentStatus === "paid") {
           setActiveOrder(null);
+          clearOrder();
           return;
         }
         setActiveOrder(order);
@@ -61,7 +63,7 @@ export default function MenuPage() {
     fetchActiveOrder();
     const interval = setInterval(fetchActiveOrder, 5000);
     return () => clearInterval(interval);
-  }, [orderNumber]);
+  }, [orderNumber, clearOrder]);
 
   const handleRequestBill = async () => {
     if (!activeOrder) return;

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Bell, ClipboardCheck, CreditCard, LogOut, ReceiptText,
-  CheckCircle2, Timer, AlertTriangle
+  CheckCircle2, Timer, AlertTriangle, ChefHat
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Order } from "@/lib/types";
@@ -129,6 +129,9 @@ export default function WaiterPage() {
   );
   const billRequested = orders.filter(
     (o) => o.billRequested && o.paymentStatus !== "paid"
+  );
+  const inKitchen = orders.filter(
+    (o) => o.status !== "completed" && o.status !== "ready" && !o.billRequested
   );
 
   const columns: {
@@ -249,6 +252,29 @@ export default function WaiterPage() {
               <p className="text-xl font-semibold text-foreground mb-1">{t.waiter.noOrders}</p>
               <p className="text-sm text-muted-foreground">
                 {isArabic ? "ستظهر الطلبات هنا" : "Orders will appear here"}
+              </p>
+            </div>
+          ) : readyForDelivery.length === 0 && billRequested.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-32 text-center">
+              <div className="relative mb-6">
+                <div className="w-24 h-24 rounded-full bg-muted/50 flex items-center justify-center">
+                  <ChefHat className="h-12 w-12 text-muted-foreground/30" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-background border-2 border-border flex items-center justify-center">
+                  <Timer className="h-4 w-4 text-primary/60" />
+                </div>
+              </div>
+              <p className="text-xl font-semibold text-foreground mb-1">
+                {isArabic ? "الطلبات في المطبخ" : "Orders in the kitchen"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {inKitchen.length > 0
+                  ? isArabic
+                    ? `${inKitchen.length} ${inKitchen.length === 1 ? "طلب" : "طلبات"} قيد التحضير`
+                    : `${inKitchen.length} order${inKitchen.length === 1 ? "" : "s"} being prepared`
+                  : isArabic
+                    ? "لا توجد طلبات جاهزة للتسليم حالياً"
+                    : "No orders ready for delivery right now"}
               </p>
             </div>
           ) : (
