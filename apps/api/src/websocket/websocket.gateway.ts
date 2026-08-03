@@ -6,11 +6,18 @@ import {
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
+import * as dotenv from "dotenv";
 import type { Order } from "@prisma/client";
+
+dotenv.config();
+
+const socketOrigins = (process.env.FRONTEND_URL || "http://localhost:8080")
+  .split(",")
+  .map((s) => s.trim());
 
 @WebSocketGateway({
   cors: {
-    origin: ["http://localhost:8080", "http://localhost:5173"],
+    origin: socketOrigins,
     credentials: true,
   },
   namespace: "/",
