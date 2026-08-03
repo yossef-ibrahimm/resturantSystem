@@ -1,27 +1,30 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { fromZonedTime, formatInTimeZone, toZonedTime } from "date-fns-tz";
 
 const CAIRO_TZ = "Africa/Cairo";
 
-function cairoNow(): Date {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: CAIRO_TZ }));
+function cairoStartOfDayUtc(d: Date): Date {
+  const ymd = formatInTimeZone(d, CAIRO_TZ, "yyyy-MM-dd");
+  return fromZonedTime(`${ymd}T00:00:00`, CAIRO_TZ);
 }
 
-function cairoStartOfDay(d: Date): Date {
-  const parts = d.toLocaleDateString("en-CA", { timeZone: CAIRO_TZ }).split("-");
-  return new Date(`${parts[0]}-${parts[1]}-${parts[2]}T00:00:00.000Z`);
-}
-
-function parseDateParam(val: string | undefined, fallback: Date): Date {
+function parseRangeDate(val: string | undefined, mode: "start" | "end", fallback: Date): Date {
   if (!val) return fallback;
+  const trimmed = val.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return mode === "start"
+      ? fromZonedTime(`${trimmed}T00:00:00`, CAIRO_TZ)
+      : fromZonedTime(`${trimmed}T23:59:59.999`, CAIRO_TZ);
+  }
   const d = new Date(val);
   return isNaN(d.getTime()) ? fallback : d;
 }
 
 function getRange(from?: string, to?: string) {
-  const now = cairoNow();
-  const end = parseDateParam(to, now);
-  const start = parseDateParam(from, cairoStartOfDay(now));
+  const now = new Date();
+  const end = parseRangeDate(to, "end", now);
+  const start = parseRangeDate(from, "start", cairoStartOfDayUtc(now));
   return { start, end };
 }
 
@@ -105,7 +108,7 @@ export class ReportsService {
       const buckets: Record<number, { revenue: number; count: number }> = {};
       for (let h = 0; h < 24; h++) buckets[h] = { revenue: 0, count: 0 };
       for (const order of orders) {
-        const hour = new Date(order.createdAt).getUTCHours();
+        const hour = Number(formatInTimeZone(order.createdAt, CAIRO_TZ, "H"));
         const rev = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
         buckets[hour].revenue += rev;
         buckets[hour].count += 1;
@@ -122,7 +125,7 @@ export class ReportsService {
       // Daily buckets
       const buckets: Record<string, { revenue: number; count: number }> = {};
       for (const order of orders) {
-        const day = order.createdAt.toISOString().slice(0, 10);
+        const day = formatInTimeZone(order.createdAt, CAIRO_TZ, "yyyy-MM-dd");
         if (!buckets[day]) buckets[day] = { revenue: 0, count: 0 };
         const rev = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
         buckets[day].revenue += rev;
@@ -142,10 +145,10 @@ export class ReportsService {
       // Weekly buckets
       const buckets: Record<string, { revenue: number; count: number }> = {};
       for (const order of orders) {
-        const d = new Date(order.createdAt);
-        const weekStart = new Date(d);
-        weekStart.setDate(d.getDate() - d.getDay());
-        const key = weekStart.toISOString().slice(0, 10);
+        const zoned = toZonedTime(order.createdAt, CAIRO_TZ);
+        const weekStart = new Date(zoned);
+        weekStart.setDate(zoned.getDate() - zoned.getDay());
+        const key = formatInTimeZone(weekStart, CAIRO_TZ, "yyyy-MM-dd");
         if (!buckets[key]) buckets[key] = { revenue: 0, count: 0 };
         const rev = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
         buckets[key].revenue += rev;
@@ -247,7 +250,7 @@ export class ReportsService {
     const hourCounts: Record<number, number> = {};
     for (let h = 0; h < 24; h++) hourCounts[h] = 0;
     for (const o of orders) {
-      const hour = new Date(o.createdAt).getUTCHours();
+      const hour = Number(formatInTimeZone(o.createdAt, CAIRO_TZ, "H"));
       hourCounts[hour] += 1;
     }
 
