@@ -32,6 +32,9 @@ dist-ssr
 *.db
 *.db-journal
 
+# Local uploads
+apps/api/uploads
+
 # OS
 Thumbs.db
 ehthumbs.db

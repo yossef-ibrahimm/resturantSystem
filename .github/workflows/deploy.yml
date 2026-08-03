@@ -39,6 +39,7 @@ jobs:
         env:
           GITHUB_ACTIONS: true
           VITE_API_URL: ${{ vars.VITE_API_URL || 'http://localhost:3001/api' }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL || 'http://localhost:3001' }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
