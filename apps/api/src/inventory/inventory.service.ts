@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, StockMovementType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { cairoDayStart, cairoDayEnd } from "../common/utils/cairo-time";
 
 @Injectable()
 export class InventoryService {
@@ -189,12 +190,10 @@ export class InventoryService {
     if (params?.type) where.type = params.type as StockMovementType;
     if (params?.from || params?.to) {
       const createdAt: Prisma.DateTimeFilter = {};
-      if (params.from) createdAt.gte = new Date(params.from);
-      if (params.to) {
-        const toDate = new Date(params.to);
-        toDate.setHours(23, 59, 59, 999);
-        createdAt.lte = toDate;
-      }
+      const gte = cairoDayStart(params.from);
+      const lte = cairoDayEnd(params.to);
+      if (gte) createdAt.gte = gte;
+      if (lte) createdAt.lte = lte;
       where.createdAt = createdAt;
     }
     if (params?.search) {

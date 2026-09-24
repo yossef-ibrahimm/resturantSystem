@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { cairoStartOfDayUtc } from "../common/utils/cairo-time";
 
 /** Prisma Decimal -> plain number */
 @Injectable()
@@ -8,8 +9,9 @@ export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getStats() {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // BE-003: day boundary is Cairo local midnight, not server-local
+    // new Date(y, m, d) which shifts with process TZ.
+    const startOfDay = cairoStartOfDayUtc(new Date());
 
     // Audit PF-1: top items now aggregate in SQL instead of loading
     // the ENTIRE order history into memory per dashboard view.

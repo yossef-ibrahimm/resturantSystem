@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { Prisma } from "@prisma/client";
+import { cairoDayStart, cairoDayEnd } from "../common/utils/cairo-time";
 
 @Injectable()
 export class ExpensesService {
@@ -23,12 +24,10 @@ export class ExpensesService {
 
     if (params?.from || params?.to) {
       const spentAt: Prisma.DateTimeFilter = {};
-      if (params.from) spentAt.gte = new Date(params.from);
-      if (params.to) {
-        const toDate = new Date(params.to);
-        toDate.setHours(23, 59, 59, 999);
-        spentAt.lte = toDate;
-      }
+      const gte = cairoDayStart(params.from);
+      const lte = cairoDayEnd(params.to);
+      if (gte) spentAt.gte = gte;
+      if (lte) spentAt.lte = lte;
       where.spentAt = spentAt;
     }
 
@@ -255,12 +254,10 @@ export class ExpensesService {
 
     if (params?.from || params?.to) {
       const spentAt: Prisma.DateTimeFilter = {};
-      if (params.from) spentAt.gte = new Date(params.from);
-      if (params.to) {
-        const toDate = new Date(params.to);
-        toDate.setHours(23, 59, 59, 999);
-        spentAt.lte = toDate;
-      }
+      const gte = cairoDayStart(params.from);
+      const lte = cairoDayEnd(params.to);
+      if (gte) spentAt.gte = gte;
+      if (lte) spentAt.lte = lte;
       where.spentAt = spentAt;
     }
 

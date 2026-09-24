@@ -1,14 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { fromZonedTime, formatInTimeZone, toZonedTime } from "date-fns-tz";
-
-const CAIRO_TZ = "Africa/Cairo";
-
-function cairoStartOfDayUtc(d: Date): Date {
-  const ymd = formatInTimeZone(d, CAIRO_TZ, "yyyy-MM-dd");
-  return fromZonedTime(`${ymd}T00:00:00`, CAIRO_TZ);
-}
+import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { CAIRO_TZ, cairoStartOfDayUtc, cairoWeekStartKey } from "../common/utils/cairo-time";
 
 function parseRangeDate(val: string | undefined, mode: "start" | "end", fallback: Date): Date {
   if (!val) return fallback;
@@ -190,13 +184,11 @@ export class ReportsService {
           })),
       };
     } else {
-      // Weekly buckets
+      // Weekly buckets (BE-002: calendar math on Cairo wall date only —
+      // no toZonedTime/setDate that depends on server local TZ).
       const buckets: Record<string, { revenue: Prisma.Decimal; count: number }> = {};
       for (const order of orders) {
-        const zoned = toZonedTime(order.createdAt, CAIRO_TZ);
-        const weekStart = new Date(zoned);
-        weekStart.setDate(zoned.getDate() - zoned.getDay());
-        const key = formatInTimeZone(weekStart, CAIRO_TZ, "yyyy-MM-dd");
+        const key = cairoWeekStartKey(order.createdAt);
         if (!buckets[key]) buckets[key] = { revenue: new Prisma.Decimal(0), count: 0 };
         buckets[key].revenue = buckets[key].revenue.add(decimal(order.total));
         buckets[key].count += 1;
