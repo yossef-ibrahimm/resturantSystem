@@ -256,3 +256,117 @@ b87636d fix(db): DB-002 settings columns + DB-005 one-open-shift unique index
 2. Confirm tax policy with product: if “discount after tax” is required, swap `applyDiscount` off `rebaseTaxAfterDiscount`.
 3. Optional: tune `cashShiftVarianceThreshold` (default 50) per store; cashiers must attach notes when closing outside threshold.
 4. Do **not** `migrate reset` / `db push --force` on live `tastytable`; backup path in header.
+
+---
+
+## 10. Full file-level change log
+
+Every file touched by remediation work on this branch, grouped by area. `A` = added, `M` = modified. (Commit `22393c2` also swept in pre-existing untracked workspace files — features/docs present on disk but never committed before — listed separately at the end; they are not audit fixes.)
+
+### 10.1 Database / Prisma / seeds
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/prisma/migrations/20260903090000_baseline_payment_table/migration.sql` | A | DB-001: baseline Payment + CashShift + money columns for clean installs |
+| `apps/api/prisma/migrations/20260906000000_settings_table_management_and_open_shift_unique/migration.sql` | A | DB-002/004/005: settings columns + partial unique one-open-shift index |
+| `apps/api/prisma/migrations/20260907000000_order_money_snapshot_and_tables/migration.sql` | A | DB-001b: Order money-snapshot columns + `Table`/`MergedGroup` (schema-history gap) |
+| `apps/api/prisma/seed-all.ts` | A | DB-003: hardening — env/`SEED_*` or random passwords, `mustChangePassword: true`, settings singleton `main` |
+| `apps/api/prisma/seed-users.ts` | A | DB-003: user seeding without hardcoded credentials |
+| `.gitignore` | M | DB-006/CFG-005: ignore `dump*.sql` / ad-hoc SQL debris |
+
+### 10.2 API — security & auth
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/common/guards/staff-throttler.guard.ts` | A→M | BE-001: staff no longer bypass throttle — 300 req/min / 60s block keyed by user id |
+| `apps/api/src/common/guards/roles.guard.ts` | M | BE-008: generic 403 body — never echoes caller role or required role list |
+| `apps/api/src/common/guards/roles.guard.spec.ts` | A→M | Asserts generic message and absence of role leakage |
+| `apps/api/src/orders/payments.controller.ts` | A→M | BE-007: `GET :id/payments` roles → `admin, waiter, cashier` (kitchen removed) |
+| `apps/api/src/storage/storage.controller.ts` | M | BE-022: `fileFilter` returns after reject (no double-callback) |
+
+### 10.3 API — timezones (shared util)
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/common/utils/cairo-time.ts` | A | BE-002/003/004: `cairoStartOfDayUtc`, `cairoEndOfDayUtc`, `cairoDayStart/End`, `cairoWeekStartKey` (DST-safe via `date-fns-tz`) |
+| `apps/api/src/common/utils/cairo-time.spec.ts` | A | 15 unit tests: midnight boundaries, week mapping, server-TZ independence |
+| `apps/api/src/reports/reports.service.ts` | M | BE-002: weekly buckets use `cairoWeekStartKey` (no `toZonedTime`/`setDate` server-TZ math) |
+| `apps/api/src/dashboard/dashboard.service.ts` | M | BE-003: `startOfDay` = Cairo midnight, not `new Date(y,m,d)` server-local |
+| `apps/api/src/expense/expenses.service.ts` | M | BE-004: date ranges via `cairoDayStart`/`cairoDayEnd` (removed `setHours(23,59,59,999)`) |
+| `apps/api/src/inventory/inventory.service.ts` | M | BE-004: same day-range fix for stock movements |
+
+### 10.4 API — orders / payments / money
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/orders/orders.service.ts` | M | BE-005: exported `rebaseTaxAfterDiscount` (post-discount tax/service); BE-006: admin cancel only `received`/`preparing` |
+| `apps/api/src/orders/orders.service.spec.ts` | A→M | Tests for tax rebase rates/rounding + cancel rules + stock fixtures |
+| `apps/api/src/orders/payments.service.ts` | A→M | BE-009: shared `MONEY_EPSILON`; BE-010: refund `approvedById` = actor (explicit self-approval); writes `partially_paid` |
+| `apps/api/src/orders/payments.service.spec.ts` | A | Payment/refund/idempotency tests |
+| `apps/api/src/inventory/stock.service.ts` | M | Stock `toDecimal` Decimal coercion in `addStock` |
+| `apps/api/src/settings/settings.service.ts` | A→M | BE-025: `cashShiftVarianceThreshold` in serialize + defensive `toNum` fallbacks |
+| `apps/api/src/settings/settings.service.spec.ts` | A→M | Settings shape tests incl. variance threshold |
+| `apps/api/src/cash-shifts/cash-shifts.service.ts` | A→M | BE-011: P2002 open-shift race → 409; BE-012: drawer formula documented; BE-013: variance threshold enforced (notes override) |
+| `apps/api/src/cash-shifts/cash-shifts.service.spec.ts` | A→M | Expected-cash math + threshold accept/reject tests |
+
+### 10.5 API — reports / performance
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/reports/reports.service.ts` | M | PERF-001: `getSummary` via `count`/`aggregate`/`groupBy` + Payment aggregates — no full-order `findMany` |
+| `apps/api/src/reports/reports.service.spec.ts` | A→M | Asserts `findMany` not called; empty-range divide-by-zero safety |
+| `apps/api/src/dashboard/dashboard.service.ts` | M | PERF-002: revenue via `prisma.order.aggregate` + `count` (no JS filter) |
+
+### 10.6 API — integrity (transactions / concurrency)
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/expense/expenses.service.ts` | A→M | BE-017: create/update/delete + `auditLog` inside `$transaction`; update path now writes `expense.update` audit (before/after) |
+| `apps/api/src/expense/expenses.service.spec.ts` | A→M | Tx mock + update-audit assertion |
+| `apps/api/src/menu/menu.service.ts` | M | BE-018: `updateMenuItem` optimistic concurrency — conditional `updateMany` on `updatedAt` → 409 on conflict |
+| `apps/api/src/menu/menu.service.spec.ts` | A→M | Race test (`count: 0` → concurrent-modification error) |
+| `apps/api/src/tables/tables.service.ts` | A | BE-019: `mergeOrders`/`unmergeOrders` fully in `$transaction` with link-count check |
+| `apps/api/src/websocket/websocket.gateway.ts` | M | BE-024: documented single-tenant broadcast (no room isolation) |
+
+### 10.7 API — tests / lint / config
+
+| File | Op | Change |
+|---|---|---|
+| `apps/api/src/auth/auth.service.spec.ts` | A | Password-policy fixture fixed |
+| `apps/api/src/common/utils/decimal.util.ts` + `.spec.ts` | A | Shared `num`/`toDecimal` helpers + tests |
+| `apps/api/src/*` (many, Phase 5 `22393c2`) | M | All `no-explicit-any`, empty catch blocks, constant expressions, hook deps eliminated; API eslint **0 errors** |
+| `apps/api/jest.config.js`, `apps/api/package.json`, `apps/api/tsconfig.json` | A/M | Jest/TS gate config (no rule weakening) |
+
+### 10.8 Frontend — money & payment status
+
+| File | Op | Change |
+|---|---|---|
+| `src/lib/money.ts` | A | `roundMoney`, `orderTotal`, `itemsSubtotal`, `remainingBalance`, payment badge helpers, `MONEY_EPSILON` |
+| `src/lib/money.test.ts` | A | 9 unit tests for money helpers |
+| `src/lib/types.ts` | M | `PaymentStatus` includes `partially_paid`; `Order` gains `tableId`/`mergedGroupId` + money snapshot; `Payment`/`PaymentWithOrder` |
+| `src/features/admin/components/OrderHistory.tsx` | M | FE-201: uses `orderTotal`/`itemsSubtotal` (server totals); zod narrowing fixed |
+| `src/features/reports/pages/SalesReportPage.tsx` | A→M | FE-202: list total from server money helpers |
+| `src/features/admin/components/AdminDashboard.tsx` | M | FE-004/203: `partially_paid` badge |
+
+### 10.9 Frontend — typecheck gate (Phase 3 `4b74d8d`)
+
+| File | Op | Change |
+|---|---|---|
+| `src/components/EmptyState.tsx` | A | Icon type union (`LucideIcon \| ReactElement`) with `isValidElement` render |
+| `src/components/DateRangePicker.tsx`, `src/components/ui/calendar.tsx` | M | Type/locale fixes |
+| `src/features/kitchen/components/KitchenPage.tsx` | M | Label lookups `?.` fallback (i18n key safety) |
+| `src/features/menu/components/MenuPage.tsx`, `src/features/orders/components/OrderStatusPage.tsx`, `src/features/waiter/components/WaiterPage.tsx` | M | Unused imports/vars removed; `Lang` type removed from WaiterPage |
+| `src/lib/utils.ts` | M | `formatPrice`/`formatDate`/`timeAgo` accept `locale: "ar" \| "en" \| string` |
+| `src/stores/authStore.ts`, `src/components/layout/Navbar.tsx` | M | FE-001: dashboard button uses `user` presence only (HttpOnly cookie) |
+| ~35 other FE files (Phase 3/5) | M | Unused imports, `replaceAll`→`split/join`, react-hooks deps, any-typed mocks — `tsc` exit 0, eslint 0 errors |
+
+### 10.10 Documentation
+
+| File | Op | Change |
+|---|---|---|
+| `FULL_CODEBASE_AUDIT_REPORT.md` | A | Source audit — 58 issue IDs |
+| `REMEDIATION_REPORT.md` | A→M | This report — per-ID status, decisions, gates, commit log, full file change log |
+
+### 10.11 Note on commit `22393c2` (Phase 5 sweep)
+
+`git add -A` during lint cleanup also committed previously **untracked workspace files** that were not audit fixes (e.g. `.codebuddy/skills/**`, `DESIGN.md`, `DESIGN_GUIDE.md`, attendance/expense/inventory/reports FE pages, `seed-images.ts`, older migrations that existed only on disk, removal of unused shadcn components). They are part of the branch history but were pre-existing work-in-progress, not remediation of the 58 IDs. See `git show 22393c2 --stat` for the full list.
