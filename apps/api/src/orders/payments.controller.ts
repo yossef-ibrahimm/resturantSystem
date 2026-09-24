@@ -77,7 +77,8 @@ export class PaymentsController {
     });
   }
 
-  @Roles("admin", "waiter", "kitchen_staff")
+  /** BE-007: payments are financial — kitchen_staff must not list them. */
+  @Roles("admin", "waiter", "cashier")
   @Get(":id/payments")
   getOrderPayments(@Param("id") orderId: string) {
     return this.paymentsService.getOrderPayments(orderId);
