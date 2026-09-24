@@ -224,55 +224,56 @@ export class TablesService {
 
   /**
    * Merge orders: link orders from different tables into a merged group.
-   * Creates the group, then links all selected orders to it.
+   * BE-019: group create + order linking run in one transaction so a partial
+   * failure cannot leave orphan groups or half-linked orders.
    */
   async mergeOrders(data: { orderIds: string[]; label?: string }) {
     if (data.orderIds.length < 2) {
       throw new BadRequestException("At least 2 orders are required to merge");
     }
 
-    // Verify all orders exist and are active (not cancelled/completed/paid)
-    const orders = await this.prisma.order.findMany({
-      where: { id: { in: data.orderIds } },
-    });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({
+        where: { id: { in: data.orderIds } },
+      });
 
-    if (orders.length !== data.orderIds.length) {
-      throw new BadRequestException("One or more orders not found");
-    }
+      if (orders.length !== data.orderIds.length) {
+        throw new BadRequestException("One or more orders not found");
+      }
 
-    const invalidOrder = orders.find(
-      (o) => o.status === "cancelled" || o.status === "completed" || o.paymentStatus === "paid"
-    );
-    if (invalidOrder) {
-      throw new BadRequestException("Cannot merge cancelled, completed, or paid orders");
-    }
+      const invalidOrder = orders.find(
+        (o) => o.status === "cancelled" || o.status === "completed" || o.paymentStatus === "paid"
+      );
+      if (invalidOrder) {
+        throw new BadRequestException("Cannot merge cancelled, completed, or paid orders");
+      }
 
-    // Collect unique table IDs from the orders
-    const tableIds = [...new Set(orders.filter((o) => o.tableId).map((o) => o.tableId!))];
-    const tableNumbers = [...new Set(orders.filter((o) => o.tableNumber).map((o) => o.tableNumber!))];
+      const tableIds = [...new Set(orders.filter((o) => o.tableId).map((o) => o.tableId!))];
+      const tableNumbers = [...new Set(orders.filter((o) => o.tableNumber).map((o) => o.tableNumber!))];
 
-    // Create merged group
-    const mergedGroup = await this.prisma.mergedGroup.create({
-      data: {
-        label: data.label || `Tables ${tableNumbers.sort((a, b) => a - b).join("+")}`,
-        tableIds,
-      },
-    });
-
-    // Link all orders to the merged group
-    await this.prisma.order.updateMany({
-      where: { id: { in: data.orderIds } },
-      data: { mergedGroupId: mergedGroup.id },
-    });
-
-    // Return updated group with linked orders
-    const updated = await this.prisma.mergedGroup.findUnique({
-      where: { id: mergedGroup.id },
-      include: {
-        orders: {
-          select: { id: true, orderNumber: true, tableNumber: true, customerName: true, total: true },
+      const mergedGroup = await tx.mergedGroup.create({
+        data: {
+          label: data.label || `Tables ${tableNumbers.sort((a, b) => a - b).join("+")}`,
+          tableIds,
         },
-      },
+      });
+
+      const link = await tx.order.updateMany({
+        where: { id: { in: data.orderIds } },
+        data: { mergedGroupId: mergedGroup.id },
+      });
+      if (link.count !== data.orderIds.length) {
+        throw new ConflictException("Merge partially applied — rolled back, retry");
+      }
+
+      return tx.mergedGroup.findUnique({
+        where: { id: mergedGroup.id },
+        include: {
+          orders: {
+            select: { id: true, orderNumber: true, tableNumber: true, customerName: true, total: true },
+          },
+        },
+      });
     });
 
     this.wsGateway.broadcastTableUpdate?.({ type: "merge", mergedGroup: updated });
@@ -281,22 +282,23 @@ export class TablesService {
 
   /**
    * Unmerge orders: remove the merged group and unlink all its orders.
+   * BE-019: unlink + delete in one transaction.
    */
   async unmergeOrders(mergedGroupId: string) {
-    const group = await this.prisma.mergedGroup.findUnique({
-      where: { id: mergedGroupId },
+    await this.prisma.$transaction(async (tx) => {
+      const group = await tx.mergedGroup.findUnique({
+        where: { id: mergedGroupId },
+      });
+
+      if (!group) throw new NotFoundException("Merged group not found");
+
+      await tx.order.updateMany({
+        where: { mergedGroupId },
+        data: { mergedGroupId: null },
+      });
+
+      await tx.mergedGroup.delete({ where: { id: mergedGroupId } });
     });
-
-    if (!group) throw new NotFoundException("Merged group not found");
-
-    // Unlink orders from this group
-    await this.prisma.order.updateMany({
-      where: { mergedGroupId },
-      data: { mergedGroupId: null },
-    });
-
-    // Delete the group
-    await this.prisma.mergedGroup.delete({ where: { id: mergedGroupId } });
 
     this.wsGateway.broadcastTableUpdate?.({ type: "unmerge", mergedGroupId });
     return { success: true };
