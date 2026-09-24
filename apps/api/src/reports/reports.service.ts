@@ -47,92 +47,119 @@ function numberValue(v: unknown): number {
   return decimal(v).toNumber();
 }
 
-function financialMetrics(order: ReportOrder) {
-  const refunds = order.payments
-    .filter((payment) => decimal(payment.amount).lt(0))
-    .reduce((sum, payment) => sum.add(decimal(payment.amount).abs()), new Prisma.Decimal(0));
-  const collectedCash = order.payments
-    .filter((payment) => payment.method === "cash")
-    .reduce((sum, payment) => sum.add(decimal(payment.amount)), new Prisma.Decimal(0));
-
-  return {
-    grossSales: decimal(order.itemsTotal),
-    discounts: decimal(order.discountAmount),
-    tax: decimal(order.taxAmount),
-    serviceCharge: decimal(order.serviceAmount),
-    netSales: decimal(order.total),
-    refunds,
-    collectedCash,
-  };
-}
-
-function sumMetric(orders: ReportOrder[], key: keyof ReturnType<typeof financialMetrics>): Prisma.Decimal {
-  return orders.reduce((sum, order) => sum.add(financialMetrics(order)[key]), new Prisma.Decimal(0));
-}
-
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * PERF-001: summary aggregates in SQL — no findMany of full order sets.
+   * Revenue = sum(total) of paid non-cancelled orders; other money metrics
+   * sum the same filtered set; refunds/cash come from Payment rows.
+   */
   async getSummary(from?: string, to?: string) {
     const { start, end } = getRange(from, to);
     const prev = getPreviousRange(start, end);
+    const notCancelled = { status: { not: "cancelled" as const } };
 
-    const [currentOrders, previousOrders] = await Promise.all([
-      this.prisma.order.findMany({
-        where: { createdAt: { gte: start, lte: end }, status: { not: "cancelled" } },
-        include: REPORT_ORDER_INCLUDE,
-      }),
-      this.prisma.order.findMany({
-        where: { createdAt: { gte: prev.start, lte: prev.end }, status: { not: "cancelled" } },
-        include: REPORT_ORDER_INCLUDE,
-      }),
-    ]);
+    const rangeWhere = (s: Date, e: Date) => ({
+      createdAt: { gte: s, lte: e },
+      ...notCancelled,
+    });
 
-    const paidOrders = currentOrders.filter((order) => order.paymentStatus === "paid");
-    const previousPaidOrders = previousOrders.filter((order) => order.paymentStatus === "paid");
-    const calcRevenue = (orders: ReportOrder[]) => sumMetric(orders, "netSales");
+    const summarize = async (s: Date, e: Date) => {
+      const where = rangeWhere(s, e);
+      const [counts, sums, typeCounts, paidSums, paymentSums] = await Promise.all([
+        this.prisma.order.count({ where }),
+        this.prisma.order.aggregate({
+          where,
+          _sum: {
+            itemsTotal: true,
+            discountAmount: true,
+            taxAmount: true,
+            serviceAmount: true,
+            total: true,
+          },
+        }),
+        this.prisma.order.groupBy({
+          by: ["orderType"],
+          where,
+          _count: { _all: true },
+        }),
+        this.prisma.order.aggregate({
+          where: { ...where, paymentStatus: "paid" },
+          _sum: { total: true },
+          _count: { _all: true },
+        }),
+        this.prisma.payment.aggregate({
+          where: {
+            order: where,
+            // refunds = negative payment amounts (any method)
+            amount: { lt: 0 },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
 
-    const revenue = calcRevenue(paidOrders);
-    const prevRevenue = calcRevenue(previousPaidOrders);
-    const orderCount = currentOrders.length;
-    const prevOrderCount = previousOrders.length;
-    const paidCount = paidOrders.length;
-    const prevPaidCount = previousPaidOrders.length;
-    const avgValue = paidCount > 0 ? money(revenue.div(paidCount)) : 0;
-    const prevAvgValue = prevPaidCount > 0 ? money(prevRevenue.div(prevPaidCount)) : 0;
-    const grossSales = sumMetric(currentOrders, "grossSales");
-    const discounts = sumMetric(currentOrders, "discounts");
-    const tax = sumMetric(currentOrders, "tax");
-    const serviceCharge = sumMetric(currentOrders, "serviceCharge");
-    const netSales = sumMetric(currentOrders, "netSales");
-    const refunds = sumMetric(currentOrders, "refunds");
-    const collectedCash = sumMetric(currentOrders, "collectedCash");
+      const cashAgg = await this.prisma.payment.aggregate({
+        where: { order: where, method: "cash" },
+        _sum: { amount: true },
+      });
 
-    const dineIn = currentOrders.filter((o) => o.orderType === "dine_in").length;
-    const takeaway = currentOrders.filter((o) => o.orderType === "takeaway").length;
+      const byType = new Map(typeCounts.map((t) => [t.orderType, t._count._all]));
+      const revenue = decimal(paidSums._sum.total);
+      const paidCount = paidSums._count._all;
+      // refunds stored as negative — report absolute outflow
+      const refunds = decimal(paymentSums._sum.amount).abs();
 
-    const pctChange = (curr: number, prev: number): number | null => {
-      if (prev === 0) return curr > 0 ? 100 : null;
-      return round2(((curr - prev) / prev) * 100);
+      return {
+        orderCount: counts,
+        paidCount,
+        revenue,
+        avgValue: paidCount > 0 ? revenue.div(paidCount) : new Prisma.Decimal(0),
+        grossSales: decimal(sums._sum.itemsTotal),
+        discounts: decimal(sums._sum.discountAmount),
+        tax: decimal(sums._sum.taxAmount),
+        serviceCharge: decimal(sums._sum.serviceAmount),
+        netSales: decimal(sums._sum.total),
+        refunds,
+        // collected cash = cash payments net of cash refunds (negatives already in sum)
+        collectedCash: decimal(cashAgg._sum.amount),
+        dineIn: byType.get("dine_in") ?? 0,
+        takeaway: byType.get("takeaway") ?? 0,
+      };
     };
 
+    const [current, previous] = await Promise.all([
+      summarize(start, end),
+      summarize(prev.start, prev.end),
+    ]);
+
+    const pctChange = (curr: number, prevVal: number): number | null => {
+      if (prevVal === 0) return curr > 0 ? 100 : null;
+      return round2(((curr - prevVal) / prevVal) * 100);
+    };
+
+    const revenue = money(current.revenue);
+    const prevRevenue = money(previous.revenue);
+    const avgValue = money(current.avgValue);
+    const prevAvgValue = money(previous.avgValue);
+
     return {
-      revenue: money(revenue),
-      revenueChange: pctChange(money(revenue), money(prevRevenue)),
-      orderCount,
-      orderCountChange: pctChange(orderCount, prevOrderCount),
+      revenue,
+      revenueChange: pctChange(revenue, prevRevenue),
+      orderCount: current.orderCount,
+      orderCountChange: pctChange(current.orderCount, previous.orderCount),
       avgValue,
       avgValueChange: pctChange(avgValue, prevAvgValue),
-      dineIn,
-      takeaway,
-      grossSales: money(grossSales),
-      discounts: money(discounts),
-      tax: money(tax),
-      serviceCharge: money(serviceCharge),
-      netSales: money(netSales),
-      refunds: money(refunds),
-      collectedCash: money(collectedCash),
+      dineIn: current.dineIn,
+      takeaway: current.takeaway,
+      grossSales: money(current.grossSales),
+      discounts: money(current.discounts),
+      tax: money(current.tax),
+      serviceCharge: money(current.serviceCharge),
+      netSales: money(current.netSales),
+      refunds: money(current.refunds),
+      collectedCash: money(current.collectedCash),
       range: { from: start.toISOString(), to: end.toISOString() },
     };
   }
