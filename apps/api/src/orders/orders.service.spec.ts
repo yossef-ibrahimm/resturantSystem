@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
-import { OrdersService } from "./orders.service";
+import { OrdersService, rebaseTaxAfterDiscount } from "./orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { WebsocketGateway } from "../websocket/websocket.gateway";
 import { StockService } from "../inventory/stock.service";
@@ -447,6 +447,43 @@ describe("OrdersService", () => {
       );
     });
 
+    it("refuses to cancel ready orders (BE-006: only received/preparing)", async () => {
+      prisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          order: {
+            findUnique: jest.fn().mockResolvedValue({ status: "ready" }),
+            updateMany: jest.fn(),
+          },
+        })
+      );
+
+      await expect(service.cancel("order-1", "reason", "admin-1")).rejects.toThrow(
+        "Only received or preparing orders can be cancelled"
+      );
+    });
+
+    it("cancels a preparing order", async () => {
+      let capturedArgs: any;
+      prisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          order: {
+            findUnique: jest
+              .fn()
+              .mockResolvedValueOnce({ status: "preparing" })
+              .mockResolvedValue({ ...mockOrder, status: "cancelled" }),
+            updateMany: jest.fn().mockImplementation((args: any) => {
+              capturedArgs = args;
+              return Promise.resolve({ count: 1 });
+            }),
+          },
+        })
+      );
+
+      const result = await service.cancel("order-1", "Kitchen overflow", "admin-1");
+      expect(result.status).toBe("cancelled");
+      expect(capturedArgs.data.cancelReason).toBe("Kitchen overflow");
+    });
+
     it("refuses double-cancel", async () => {
       prisma.$transaction.mockImplementation(async (fn: any) =>
         fn({
@@ -546,6 +583,29 @@ describe("OrdersService", () => {
 
       await expect(service.applyDiscount("order-1", 10, "Manager approval", "admin-1"))
         .rejects.toThrow("Cannot apply a discount after payment has been recorded");
+    });
+  });
+
+  describe("rebaseTaxAfterDiscount (BE-005)", () => {
+    it("rebases tax and service on the discounted base", () => {
+      const r = rebaseTaxAfterDiscount(80, 0.14, 0.1);
+      expect(r.taxAmount).toBe(11.2);
+      expect(r.serviceAmount).toBe(8);
+      expect(r.total).toBe(99.2);
+    });
+
+    it("keeps zero rates as pure subtraction", () => {
+      const r = rebaseTaxAfterDiscount(45, 0, 0);
+      expect(r.taxAmount).toBe(0);
+      expect(r.serviceAmount).toBe(0);
+      expect(r.total).toBe(45);
+    });
+
+    it("rounds money to 2 decimals", () => {
+      const r = rebaseTaxAfterDiscount(33.33, 0.14, 0.05);
+      expect(r.taxAmount).toBe(4.67);
+      expect(r.serviceAmount).toBe(1.67);
+      expect(r.total).toBe(39.67);
     });
   });
 
