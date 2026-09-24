@@ -3,6 +3,15 @@
 .env.local
 .env.*.local
 
+# DB dumps / ad-hoc SQL (never commit — may contain hashes or data)
+dump.sql
+dump2.sql
+**/dump.sql
+**/dump2.sql
+add_data.sql
+temp_add.sql
+/query
+
 # Logs
 logs
 *.log
