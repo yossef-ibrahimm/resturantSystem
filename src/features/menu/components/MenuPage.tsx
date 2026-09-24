@@ -1,24 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/i18n";
-import { getMenuItems, getCategories, getOrderByNumber, requestBill } from "@/lib/api";
+import { getMenuItems, getCategories, getOrderByToken, requestBillByToken } from "@/lib/api";
 import { useCartStore } from "@/stores/cartStore";
 import { useActiveOrderStore } from "@/stores/activeOrderStore";
+import { useSettingsQuery } from "@/hooks/useSettings";
 import { formatPrice } from "@/lib/utils";
+import { onSocketEvent } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShoppingCart, ReceiptText, CheckCircle } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import { Plus, UtensilsCrossed, ReceiptText, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { MenuItem, Category, Order } from "@/lib/types";
+import MenuFooter from "./MenuFooter";
 
 export default function MenuPage() {
   const { t, isArabic, language } = useLanguage();
   const { addItem } = useCartStore();
-  const { orderNumber } = useActiveOrderStore();
+  const { orderToken } = useActiveOrderStore();
   const clearOrder = useActiveOrderStore((s) => s.clearOrder);
-  const navigate = useNavigate();
+  const { data: settings } = useSettingsQuery();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -43,13 +46,27 @@ export default function MenuPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    if (!orderNumber) {
+    const unsub = onSocketEvent("menu:availability", (data: unknown) => {
+      const { menuItemId, available } = data as { menuItemId: string; available: boolean };
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === menuItemId ? { ...item, available } : item
+        )
+      );
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!orderToken) {
       setActiveOrder(null);
       return;
     }
+    let cancelled = false;
     const fetchActiveOrder = async () => {
       try {
-        const order = await getOrderByNumber(orderNumber);
+        const order = await getOrderByToken(orderToken);
+        if (cancelled) return;
         if (order.paymentStatus === "paid") {
           setActiveOrder(null);
           clearOrder();
@@ -57,19 +74,20 @@ export default function MenuPage() {
         }
         setActiveOrder(order);
       } catch {
-        setActiveOrder(null);
+        if (cancelled) return;
+        // Don't clear on transient errors — order persists until payment
       }
     };
     fetchActiveOrder();
     const interval = setInterval(fetchActiveOrder, 5000);
-    return () => clearInterval(interval);
-  }, [orderNumber, clearOrder]);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [orderToken, clearOrder]);
 
   const handleRequestBill = async () => {
     if (!activeOrder) return;
     setBillLoading(true);
     try {
-      const updated = await requestBill(activeOrder.orderNumber);
+      const updated = await requestBillByToken(activeOrder.orderToken);
       setActiveOrder(updated);
       toast.success(isArabic ? t.orderStatus.billRequestedSuccess : t.orderStatus.billRequestedSuccess);
     } catch {
@@ -93,14 +111,14 @@ export default function MenuPage() {
   if (loading) {
     return (
       <div className="container py-8">
-        <Skeleton className="h-10 w-48 mb-4" />
-        <Skeleton className="h-6 w-72 mb-8" />
+        <Skeleton className="h-9 w-48 mb-2" />
+        <Skeleton className="h-5 w-72 mb-8" />
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-9 w-24 rounded-full" />
+            <Skeleton key={i} className="h-9 w-24 rounded-full shrink-0" />
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Skeleton key={i} className="h-72 rounded-lg" />
           ))}
@@ -119,9 +137,20 @@ export default function MenuPage() {
   }
 
   return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-2">{t.menu.title}</h1>
-      <p className="text-muted-foreground mb-8">{t.menu.subtitle}</p>
+    <div className="relative min-h-screen">
+      {/* Background image with overlay */}
+      {settings?.menuBackgroundUrl && (
+        <div
+          className="fixed inset-0 z-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${settings.menuBackgroundUrl})` }}
+        >
+          <div className="absolute inset-0 bg-background/20 backdrop-blur-sm" />
+        </div>
+      )}
+
+      <div className="container py-8 relative z-10">
+        <h1 className="text-3xl font-bold mb-1.5">{t.menu.title}</h1>
+        <p className="text-muted-foreground mb-8 text-sm">{t.menu.subtitle}</p>
 
       {/* Category Filter */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2" dir="ltr">
@@ -148,26 +177,30 @@ export default function MenuPage() {
 
       {/* Menu Grid */}
       {filteredItems.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground text-lg">{t.menu.noItems}</p>
-        </div>
+        <EmptyState
+          icon={UtensilsCrossed}
+          title={t.menu.noItems}
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden hover:shadow-card transition-shadow group">
+            <Card
+              key={item.id}
+              className="overflow-hidden group hover:shadow-hover hover:-translate-y-0.5 transition-all duration-300"
+            >
               <div className="relative aspect-[4/3] overflow-hidden">
                 <img
                   src={item.image}
                   alt={isArabic ? item.nameAr : item.nameEn}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                   loading="lazy"
                   onError={(e) => {
                     e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150' fill='%23e5e7eb'%3E%3Crect width='200' height='150'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E";
                   }}
                 />
                 {!item.available && (
-                  <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                    <Badge variant="destructive" className="text-sm px-3 py-1">
+                  <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex items-center justify-center">
+                    <Badge variant="destructive" className="text-xs px-3 py-1">
                       {t.menu.soldOut}
                     </Badge>
                   </div>
@@ -175,14 +208,14 @@ export default function MenuPage() {
               </div>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <h3 className="font-semibold text-base leading-tight">
+                  <h3 className="font-semibold text-sm leading-snug">
                     {isArabic ? item.nameAr : item.nameEn}
                   </h3>
-                  <span className="text-accent font-bold whitespace-nowrap text-sm">
+                  <span className="text-accent font-bold whitespace-nowrap text-sm shrink-0">
                     {formatPrice(item.price, language)}
                   </span>
                 </div>
-                <p className="text-muted-foreground text-xs mb-3 line-clamp-2">
+                <p className="text-muted-foreground text-xs mb-3 line-clamp-2 leading-relaxed">
                   {isArabic ? item.descriptionAr : item.descriptionEn}
                 </p>
                 <Button
@@ -206,7 +239,7 @@ export default function MenuPage() {
         <div className="fixed bottom-6 end-6 z-50">
           <Button
             size="lg"
-            className="gap-2 rounded-full shadow-lg h-14 px-6"
+            className="gap-2 rounded-full shadow-elevated h-14 px-6"
             onClick={handleRequestBill}
             disabled={billLoading}
           >
@@ -218,12 +251,15 @@ export default function MenuPage() {
 
       {activeOrder && activeOrder.billRequested && (
         <div className="fixed bottom-6 end-6 z-50">
-          <div className="flex items-center gap-2 bg-orange-500 text-white rounded-full px-5 py-3 shadow-lg">
+          <div className="flex items-center gap-2 bg-[hsl(var(--status-preparing))] text-[hsl(var(--status-preparing-fg))] rounded-full px-5 py-3 shadow-elevated border border-[hsl(var(--status-preparing-border))]">
             <CheckCircle className="h-5 w-5" />
             <span className="font-semibold text-sm">{t.orderStatus.billRequested}</span>
           </div>
         </div>
       )}
+
+      <MenuFooter settings={settings} />
+      </div>
     </div>
   );
 }

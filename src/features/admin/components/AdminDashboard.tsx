@@ -10,14 +10,14 @@ import {
   getOrders,
 } from "@/lib/api";
 import { formatPrice, timeAgo } from "@/lib/utils";
-import { ORDER_STATUS_LABELS, STATUS_COLORS } from "@/lib/constants";
+import { ORDER_STATUS_LABELS, STATUS_COLORS, STATUS_BAR_COLORS } from "@/lib/constants";
 import { DateRangePicker, useDateRange } from "@/components/DateRangePicker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
@@ -58,7 +58,7 @@ function ChangeIndicator({ value, language }: { value: number | null; language: 
 function SkeletonCard() {
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-4 sm:p-5">
         <div className="space-y-3">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-8 w-20" />
@@ -96,7 +96,7 @@ export default function AdminDashboard() {
         getReportTopItems(from, to),
         getReportPeakHours(from, to),
         getReportUnavailableItems(),
-        getOrders(),
+        getOrders({ take: 10 }),
       ]);
       if (reqId !== abortRef.current) return;
       setSummary(s);
@@ -150,43 +150,52 @@ export default function AdminDashboard() {
   const statusBreakdown = statusData?.statuses || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t.admin.dashboard}</h1>
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t.admin.dashboard}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3 w-3 shrink-0" />
               {t.admin.stats.lastUpdated}: {lastUpdated.toLocaleTimeString(language === "ar" ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={loading}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1 sm:flex-initial">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={loading}
+            className="h-10 w-10 shrink-0 touch-manipulation sm:h-9 sm:w-9"
+            aria-label={language === "ar" ? "تحديث" : "Refresh"}
+          >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         {loading && !summary
           ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
           : summaryCards.map((card) => (
               <Card key={card.label} className={`bg-gradient-to-br ${card.gradient} border-border/50`}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{card.label}</p>
-                      <p className="text-2xl font-bold tracking-tight">{card.value}</p>
-                      <div className="flex items-center gap-2">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <p className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{card.label}</p>
+                      <p className="text-xl font-bold tracking-tight sm:text-2xl">{card.value}</p>
+                      <div className="flex flex-wrap items-center gap-2">
                         {card.change !== null && <ChangeIndicator value={card.change} language={language} />}
                         {card.sub && <span className="text-xs text-muted-foreground">{card.sub}</span>}
                       </div>
                     </div>
-                    <div className={`${card.iconBg} rounded-xl p-2.5`}>
+                    <div className={`${card.iconBg} shrink-0 rounded-xl p-2.5`}>
                       <card.icon className={`h-5 w-5 ${card.iconColor}`} />
                     </div>
                   </div>
@@ -196,13 +205,13 @@ export default function AdminDashboard() {
       </div>
 
       {/* Revenue Over Time + Order Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Revenue Chart - 2/3 width */}
         <Card className="lg:col-span-2">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="bg-primary/10 rounded-lg p-1.5">
+                <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
                   <BarChart3 className="h-4 w-4 text-primary" />
                 </div>
                 <h2 className="font-semibold">{t.admin.stats.revenueOverTime}</h2>
@@ -212,18 +221,18 @@ export default function AdminDashboard() {
               </span>
             </div>
             {loading && !revenue ? (
-              <Skeleton className="h-[280px] w-full" />
+              <Skeleton className="h-[220px] w-full sm:h-[280px]" />
             ) : revenueData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
-                <BarChart3 className="h-10 w-10 mb-2 opacity-30" />
+              <div className="flex h-[220px] flex-col items-center justify-center text-muted-foreground sm:h-[280px]">
+                <BarChart3 className="mb-2 h-10 w-10 opacity-30" />
                 <p className="text-sm">{t.admin.stats.noData}</p>
               </div>
             ) : (
-              <ChartContainer config={revenueChartConfig} className="h-[280px]">
-                <BarChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+              <ChartContainer config={revenueChartConfig} className="h-[220px] w-full sm:h-[280px]">
+                <BarChart data={revenueData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v} />
                   <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => [formatPrice(Number(value), language), name === "revenue" ? (language === "ar" ? "الإيراد" : "Revenue") : (language === "ar" ? "الطلبات" : "Orders")]} />} />
                   <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -234,9 +243,9 @@ export default function AdminDashboard() {
 
         {/* Order Status Breakdown - 1/3 width */}
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="bg-primary/10 rounded-lg p-1.5">
+          <CardContent className="p-4 sm:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
                 <Flame className="h-4 w-4 text-primary" />
               </div>
               <h2 className="font-semibold">{t.admin.stats.orderStatus}</h2>
@@ -246,25 +255,25 @@ export default function AdminDashboard() {
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : statusBreakdown.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-[240px] text-muted-foreground">
-                <Flame className="h-10 w-10 mb-2 opacity-30" />
+              <div className="flex h-[200px] flex-col items-center justify-center text-muted-foreground sm:h-[240px]">
+                <Flame className="mb-2 h-10 w-10 opacity-30" />
                 <p className="text-sm">{t.admin.stats.noData}</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {statusBreakdown.map((s) => (
                   <div key={s.status} className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS_HEX[s.status] }} />
-                        <span className="text-sm font-medium">{ORDER_STATUS_LABELS[s.status]?.[language]}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS_HEX[s.status] }} />
+                        <span className="truncate text-sm font-medium">{ORDER_STATUS_LABELS[s.status]?.[language]}</span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         <span className="text-sm font-bold">{s.count}</span>
                         <span className="text-xs text-muted-foreground">{Math.round(s.percentage)}%</span>
                       </div>
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{ width: `${s.percentage}%`, backgroundColor: STATUS_COLORS_HEX[s.status] }}
@@ -279,12 +288,12 @@ export default function AdminDashboard() {
       </div>
 
       {/* Best-Selling Items + Category Breakdown + Peak Hours */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Best-Selling Items - 2/3 width */}
         <Card className="lg:col-span-2">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="bg-accent/10 rounded-lg p-1.5">
+          <CardContent className="p-4 sm:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="shrink-0 rounded-lg bg-accent/10 p-1.5">
                 <TrendingUp className="h-4 w-4 text-accent" />
               </div>
               <h2 className="font-semibold">{t.admin.stats.bestSellingItems}</h2>
@@ -295,9 +304,9 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <Tabs defaultValue="quantity">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="quantity">{t.admin.stats.byQuantity}</TabsTrigger>
-                  <TabsTrigger value="revenue">{t.admin.stats.byRevenue}</TabsTrigger>
+                <TabsList className="mb-4 w-full overflow-x-auto sm:w-auto">
+                  <TabsTrigger value="quantity" className="touch-manipulation">{t.admin.stats.byQuantity}</TabsTrigger>
+                  <TabsTrigger value="revenue" className="touch-manipulation">{t.admin.stats.byRevenue}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="quantity">
                   <ItemsList items={topItems?.byQuantity || []} language={language} isArabic={isArabic} metric="quantity" />
@@ -311,25 +320,25 @@ export default function AdminDashboard() {
         </Card>
 
         {/* Peak Hours + Categories */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Peak Hours */}
           <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-primary/10 rounded-lg p-1.5">
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
                   <Clock className="h-4 w-4 text-primary" />
                 </div>
                 <h2 className="font-semibold">{t.admin.stats.peakHours}</h2>
               </div>
               {loading && !peakHours ? (
-                <Skeleton className="h-[180px] w-full" />
+                <Skeleton className="h-[160px] w-full sm:h-[180px]" />
               ) : peakData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[180px] text-muted-foreground">
-                  <Clock className="h-8 w-8 mb-2 opacity-30" />
+                <div className="flex h-[160px] flex-col items-center justify-center text-muted-foreground sm:h-[180px]">
+                  <Clock className="mb-2 h-8 w-8 opacity-30" />
                   <p className="text-xs">{t.admin.stats.noData}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-6 gap-1">
+                <div className="grid grid-cols-4 gap-1 xs:grid-cols-6 sm:grid-cols-6">
                   {peakData.map((h) => (
                     <div
                       key={h.hour}
@@ -337,7 +346,7 @@ export default function AdminDashboard() {
                       title={`${h.label}: ${h.count}`}
                     >
                       <div
-                        className="w-full aspect-square rounded-md flex items-center justify-center text-[10px] font-bold text-white transition-colors"
+                        className="flex aspect-square w-full items-center justify-center rounded-md text-[10px] font-bold text-white transition-colors"
                         style={{
                           backgroundColor: `hsl(153, 32%, ${18 + (1 - h.intensity) * 60}%)`,
                           opacity: h.count === 0 ? 0.2 : 0.4 + h.intensity * 0.6,
@@ -345,7 +354,7 @@ export default function AdminDashboard() {
                       >
                         {h.count > 0 ? h.count : ""}
                       </div>
-                      <span className="text-[9px] text-muted-foreground leading-none">{h.hour % 3 === 0 ? `${h.hour}` : ""}</span>
+                      <span className="text-[9px] leading-none text-muted-foreground">{h.hour % 3 === 0 ? `${h.hour}` : ""}</span>
                     </div>
                   ))}
                 </div>
@@ -355,9 +364,9 @@ export default function AdminDashboard() {
 
           {/* Category Breakdown */}
           <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-primary/10 rounded-lg p-1.5">
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
                   <UtensilsCrossed className="h-4 w-4 text-primary" />
                 </div>
                 <h2 className="font-semibold">{t.admin.stats.categoryBreakdown}</h2>
@@ -367,7 +376,7 @@ export default function AdminDashboard() {
                   {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (topItems?.categories || []).length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[120px] text-muted-foreground">
+                <div className="flex h-[120px] flex-col items-center justify-center text-muted-foreground">
                   <p className="text-xs">{t.admin.stats.noData}</p>
                 </div>
               ) : (
@@ -376,11 +385,11 @@ export default function AdminDashboard() {
                     const maxRev = Math.max(...topItems!.categories.map((c) => c.revenue), 1);
                     return (
                       <div key={idx}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm">{isArabic ? cat.nameAr : cat.nameEn}</span>
-                          <span className="text-xs font-bold">{formatPrice(cat.revenue, language)}</span>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="truncate text-sm">{isArabic ? cat.nameAr : cat.nameEn}</span>
+                          <span className="shrink-0 text-xs font-bold">{formatPrice(cat.revenue, language)}</span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-primary/60 transition-all duration-500"
                             style={{ width: `${(cat.revenue / maxRev) * 100}%` }}
@@ -399,16 +408,16 @@ export default function AdminDashboard() {
       {/* Unavailable Items Alert */}
       {unavailable.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/50">
-          <CardContent className="p-5">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex items-start gap-3">
-              <div className="bg-amber-100 rounded-lg p-2 shrink-0">
+              <div className="shrink-0 rounded-lg bg-amber-100 p-2">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="font-semibold text-amber-800">{t.admin.stats.unavailableAlert}</h3>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {unavailable.map((item) => (
-                    <Badge key={item.id} variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">
+                    <Badge key={item.id} variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">
                       {isArabic ? item.nameAr : item.nameEn}
                     </Badge>
                   ))}
@@ -421,10 +430,10 @@ export default function AdminDashboard() {
 
       {/* Recent Orders Feed */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className="bg-primary/10 rounded-lg p-1.5">
+              <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
                 <Clock className="h-4 w-4 text-primary" />
               </div>
               <h2 className="font-semibold">{t.admin.stats.recentOrdersFeed}</h2>
@@ -439,25 +448,25 @@ export default function AdminDashboard() {
             </div>
           ) : recentOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Clock className="h-10 w-10 mb-2 opacity-30" />
+              <Clock className="mb-2 h-10 w-10 opacity-30" />
               <p className="text-sm">{t.admin.stats.noData}</p>
             </div>
           ) : (
             <div className="space-y-1">
               {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors">
-                  <div className={`w-1 h-8 rounded-full shrink-0 ${STATUS_COLORS[order.status]}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                <div key={order.id} className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-muted/50 sm:gap-3 sm:p-2.5">
+                  <div className={`h-8 w-1 shrink-0 rounded-full ${STATUS_BAR_COLORS[order.status] || "bg-muted"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-sm font-bold">#{order.orderNumber}</span>
-                      <Badge className={`${STATUS_COLORS[order.status]} text-[10px] px-1.5 py-0`} variant="outline">
+                      <Badge className={`${STATUS_COLORS[order.status]} px-1.5 py-0 text-[10px]`} variant="outline">
                         {ORDER_STATUS_LABELS[order.status]?.[language]}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{order.customerName}</p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-medium">{formatPrice(order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0), language)}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-medium">{formatPrice(order.total, language)}</p>
                     <p className="text-[11px] text-muted-foreground">{timeAgo(order.createdAt, language)}</p>
                   </div>
                 </div>
@@ -472,11 +481,11 @@ export default function AdminDashboard() {
 
 // ─── Items List Subcomponent ───
 
-function ItemsList({ items, language, isArabic, metric }: { items: TopItem[]; language: string; isArabic: boolean; metric: "quantity" | "revenue" }) {
+function ItemsList({ items, language, isArabic, metric }: { items: TopItem[]; language: "ar" | "en"; isArabic: boolean; metric: "quantity" | "revenue" }) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <TrendingUp className="h-10 w-10 mb-2 opacity-30" />
+        <TrendingUp className="mb-2 h-10 w-10 opacity-30" />
         <p className="text-sm">{isArabic ? "لا توجد بيانات" : "No data available"}</p>
       </div>
     );
@@ -488,18 +497,18 @@ function ItemsList({ items, language, isArabic, metric }: { items: TopItem[]; la
     <div className="space-y-2">
       {items.map((item, idx) => (
         <div key={idx} className="group">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-[10px] font-bold text-primary">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-[10px] font-bold text-primary">
                 {idx + 1}
               </span>
-              <span className="text-sm font-medium">{isArabic ? item.nameAr : item.nameEn}</span>
+              <span className="truncate text-sm font-medium">{isArabic ? item.nameAr : item.nameEn}</span>
             </div>
-            <span className="text-sm font-bold">
+            <span className="shrink-0 text-sm font-bold">
               {metric === "quantity" ? `${item.quantity}×` : formatPrice(item.revenue, language)}
             </span>
           </div>
-          <div className="ml-7 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted rtl:ml-0 rtl:mr-7">
             <div
               className="h-full rounded-full bg-primary/50 transition-all duration-500"
               style={{ width: `${((metric === "quantity" ? item.quantity : item.revenue) / maxVal) * 100}%` }}

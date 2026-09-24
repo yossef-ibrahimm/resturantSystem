@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,6 +92,9 @@ export default function OrderHistory() {
     setRefundErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
 
+    if (!amountResult.success || !reasonResult.success) return;
+    if (!refundPaymentId) return;
+
     try {
       await refundPayment(refundPaymentId, { amount: amountResult.data, method: refundMethod, reason: reasonResult.data });
       toast.success(isArabic ? "تم استرداد المبلغ" : "Refund processed");
@@ -125,7 +128,7 @@ export default function OrderHistory() {
     if (!amountResult.success) newErrors.amount = amountResult.error.errors[0].message;
     if (!reasonResult.success) newErrors.reason = reasonResult.error.errors[0].message;
     setDiscountErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    if (!amountResult.success || !reasonResult.success) return;
 
     if (amountResult.data > selectedOrder.itemsTotal) {
       setDiscountErrors({ amount: isArabic ? "الخصم أكبر من إجمالي الأصناف" : "Discount exceeds items total" });

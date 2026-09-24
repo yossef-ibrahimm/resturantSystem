@@ -114,7 +114,7 @@ export function useDateRange(): [DateRange, (range: DateRange) => void] {
 }
 
 export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
-  const { t, language } = useLanguage();
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState<Date | undefined>(value.from);
   const [customTo, setCustomTo] = useState<Date | undefined>(value.to);

@@ -62,6 +62,8 @@ export interface Order {
   phone?: string;
   orderType: OrderType;
   tableNumber?: number;
+  tableId?: string | null;
+  mergedGroupId?: string | null;
   notes?: string;
   items: OrderItem[];
   status: OrderStatus;
