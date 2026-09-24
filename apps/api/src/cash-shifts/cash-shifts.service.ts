@@ -55,8 +55,20 @@ export class CashShiftsService {
 
   /**
    * Close the current open shift.
-   * Computes expectedCash = openingFloat + SUM(cash payments) - SUM(cash refunds) in this shift.
-   * Records actualCash, variance.
+   *
+   * BE-012 expected-cash formula (drawer truth):
+   *   expected = openingFloat
+   *            + Σ positive cash payments in this shift
+   *            + Σ negative cash payments in this shift   (cash refunds leave the drawer)
+   *            − Σ cash expenses in this shift
+   *
+   * Non-cash payments/refunds (card, wallet, other) never touch the physical
+   * drawer and are intentionally excluded — a card refund paid out in cash is
+   * recorded as a negative `method:"cash"` row and is folded in above.
+   *
+   * BE-013: |variance| must be within `cashShiftVarianceThreshold` from
+   * settings, OR the closer must supply explanatory notes. Threshold breach
+   * without notes → 400.
    */
   async close(closedById: string, closingFloat: number, notes?: string) {
     if (!Number.isFinite(closingFloat) || closingFloat < 0) {
@@ -72,30 +84,45 @@ export class CashShiftsService {
         throw new BadRequestException("No open shift to close");
       }
 
-      // Sum cash payments in this shift (positive amounts, method=cash).
-      const cashIn = await tx.payment.aggregate({
-        where: { cashShiftId: open.id, method: "cash", amount: { gt: 0 } },
-        _sum: { amount: true },
-      });
-      // Sum cash refunds (negative amounts, method=cash). Stored as negative on the row.
-      const cashOut = await tx.payment.aggregate({
-        where: { cashShiftId: open.id, method: "cash", amount: { lt: 0 } },
-        _sum: { amount: true },
-      });
-      // Sum refunds of card/online payments that were refunded as cash (admin issues a negative 'other' or similar).
-      // For now: only the simple case — cash in vs cash out.
+      const [cashIn, cashOut, cashExpenses, settings] = await Promise.all([
+        tx.payment.aggregate({
+          where: { cashShiftId: open.id, method: "cash", amount: { gt: 0 } },
+          _sum: { amount: true },
+        }),
+        tx.payment.aggregate({
+          where: { cashShiftId: open.id, method: "cash", amount: { lt: 0 } },
+          _sum: { amount: true },
+        }),
+        tx.expense.aggregate({
+          where: { cashShiftId: open.id, paymentMethod: "cash", deletedAt: null },
+          _sum: { amount: true },
+        }),
+        tx.restaurantSettings.findUnique({ where: { id: "main" } }),
+      ]);
 
       const opening = new Prisma.Decimal(open.openingFloat);
       const cashInTotal = new Prisma.Decimal(cashIn._sum.amount ?? 0);
       const cashOutTotal = new Prisma.Decimal(cashOut._sum.amount ?? 0); // negative
-      const cashExpenses = await tx.expense.aggregate({
-        where: { cashShiftId: open.id, paymentMethod: "cash", deletedAt: null },
-        _sum: { amount: true },
-      });
       const cashExpenseTotal = new Prisma.Decimal(cashExpenses._sum.amount ?? 0);
       const expectedCash = opening.add(cashInTotal).add(cashOutTotal).sub(cashExpenseTotal);
       const closing = new Prisma.Decimal(closingFloat);
       const variance = closing.sub(expectedCash);
+
+      // BE-013 — enforce variance threshold (default 50 when unset)
+      const thresholdRaw = settings?.cashShiftVarianceThreshold;
+      const threshold =
+        thresholdRaw === null || thresholdRaw === undefined
+          ? 50
+          : Number(thresholdRaw);
+      const safeThreshold = Number.isFinite(threshold) ? threshold : 50;
+      const absVariance = variance.abs().toNumber();
+      const hasNotes = typeof notes === "string" && notes.trim().length > 0;
+      if (absVariance > safeThreshold && !hasNotes) {
+        throw new BadRequestException(
+          `Cash variance ${variance.toString()} exceeds threshold ±${safeThreshold}. ` +
+            `Provide explanatory notes to close, or adjust the drawer.`
+        );
+      }
 
       return tx.cashShift.update({
         where: { id: open.id },
