@@ -19,6 +19,7 @@ Backup (before work): `C:\Users\Yossef\AppData\Local\Temp\opencode\tastytable_ba
 | 6 | Tests green | Done — API 139/139; FE 10/10 |
 | 7 | Clean-DB proof + report | Done — empty DB migrate+seed+API probe 200; report below |
 | 8 | Deferred HIGH/MED security + TZ | Done — BE-001/002/003/004/007/008/022 fixed; API tests **154/154** |
+| 9 | Remaining residuals | Done — PERF-001, BE-012/013/017/018/019 fixed; API tests **160/160** |
 
 **Gates (after)**
 
@@ -29,7 +30,7 @@ Backup (before work): `C:\Users\Yossef\AppData\Local\Temp\opencode\tastytable_ba
 | FE tests | `npm test` | **10/10 pass** |
 | API typecheck | `npx tsc --noEmit` | **exit 0** |
 | API lint | `npm run lint` / `npx eslint src` | **exit 0** (0 errors) |
-| API tests | `npx jest` | **15 suites / 154 tests pass** (Phase 8) |
+| API tests | `npx jest` | **15 suites / 160 tests pass** (Phase 9) |
 | Clean DB migrate | `prisma migrate deploy` on empty `tastytable_scratch2` | **exit 0** (18 migrations) |
 | Clean DB seed | `prisma db seed` | **exit 0** (users/menu/inventory/orders/settings) |
 | API probe | `GET /api/settings` on seeded scratch | **HTTP 200** full settings shape |
@@ -75,11 +76,14 @@ Legend: **FIXED** = code changed + verified; **VERIFIED** = finding confirmed, c
 | FE-202 | HIGH | **FIXED** | `2e3a96d` Sales report list total |
 | FE-203 | MEDIUM | **FIXED** | `2e3a96d` payment badge helpers |
 | FE-204 | MEDIUM | **FIXED** | Aligns with BE-006 (UI already `received\|preparing`) |
-| PERF-001 | HIGH | **DEFER** | Report summary full-set load — residual (PERF-002 done) |
+| PERF-001 | HIGH | **FIXED** | `9d1365d` getSummary via count/aggregate/groupBy — no findMany |
 | PERF-002 | MEDIUM | **FIXED** | `9a64f88` SQL `_sum` for today’s paid revenue |
 | CFG-012/013 | LOW | **VERIFIED** | Dual locks / scaffold name — hygiene, not changed |
-| BE-012/013/017/018/019 | LOW/MED | **DEFER** | Not in this phase’s commit scope — residual list §6 |
-| BE-022 | LOW | **FIXED** | `0fb378c` fileFilter returns after reject |
+| BE-012 | LOW | **FIXED** | `ad08197` drawer formula documented (cash-in − cash-out − cash expenses) |
+| BE-013 | LOW | **FIXED** | `ad08197` variance threshold enforced — over-threshold requires notes |
+| BE-017 | MEDIUM | **FIXED** | `5ad9172` expense CRUD + audit in one transaction; update now audited |
+| BE-018 | MEDIUM | **FIXED** | `588bdd1` `updateMenuItem` optimistic concurrency (`updatedAt` guard → 409) |
+| BE-019 | MEDIUM | **FIXED** | `786b354` merge/unmerge in `$transaction` with link-count check |
 
 Other FE type errors (unused imports, missing types, EmptyState icon, formatPrice locale, etc.) fixed in `4b74d8d`.
 
@@ -137,6 +141,15 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 - **BE-022**: upload `fileFilter` returns after reject.
 - Gates: API **tsc 0 / eslint 0 / jest 154**; FE **tsc 0 / lint 0 errors / tests 10**.
 
+### Phase 9 — Remaining residuals (follow-up)
+- **PERF-001**: `getSummary` rewritten to SQL `count`/`aggregate`/`groupBy` (+ Payment aggregates for refunds/cash); no full-set `findMany`.
+- **BE-012**: expected-cash formula explicitly documented: `opening + Σcash-in + Σcash-refunds − Σcash-expenses`; non-cash never touches drawer.
+- **BE-013**: `cashShiftVarianceThreshold` enforced on close — `|variance| > threshold` without explanatory notes → 400.
+- **BE-017**: expense create/update/delete + `auditLog` all inside `$transaction`; update path now writes `expense.update` audit (before/after).
+- **BE-018**: `updateMenuItem` uses conditional `updateMany` on `updatedAt`; concurrent edit → `ConflictException` (409).
+- **BE-019**: `mergeOrders`/`unmergeOrders` fully transactional (create+link, unlink+delete) with link-count check.
+- Gates: API **tsc 0 / eslint 0 / jest 160**; FE **tsc 0 / lint 0 errors / tests 10**.
+
 ---
 
 ## 4. Decisions Needed (product defaults applied)
@@ -165,12 +178,10 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 
 | Area | IDs | Note |
 |---|---|---|
-| Perf reports | PERF-001 | Summary still loads large order sets |
-| Menu/merge TOCTOU | BE-018, BE-019 | Probable, not fixed this pass |
-| Expense audit | BE-017 | Audit outside transaction |
-| Cash close / variance | BE-012, BE-013 | Non-cash refunds; threshold unused |
 | Git secret history | — | Old seed passwords in commits; **rotate live credentials**, do not rewrite history without explicit ops decision |
 | FE lint warnings | — | 6× `react-refresh/only-export-components` (shadcn/ui pattern) |
+
+**No code findings remain open from the 58-ID register.**
 
 ---
 
@@ -180,7 +191,7 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 |---|---|---|
 | Clean DB `migrate deploy` | Fail (P3006/P1014 missing Payment/settings/Order money/Table) | **Pass** |
 | API `tsc --noEmit` | Pass (baseline) | **Pass** |
-| API jest | 134 (with fixed fixtures) | **154 pass** (15 suites, Phase 8) |
+| API jest | 134 (with fixed fixtures) | **160 pass** (15 suites, Phase 9) |
 | API lint | 85+ errors | **0 errors** |
 | FE `tsc --noEmit` | **Fail** (many errors) | **Pass** |
 | FE lint | ~124 problems | **0 errors** / 6 warnings |
@@ -194,12 +205,23 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 | Kitchen payments read | Allowed | Denied (BE-007) |
 | RolesGuard 403 body | Echoed role list | Generic message (BE-008) |
 | Upload fileFilter | Double-callback | Return after reject (BE-022) |
+| Report summary | Full findMany | SQL aggregates (PERF-001) |
+| Expense audit | Outside tx / update silent | In-tx + update audit (BE-017) |
+| Menu update | Read-then-write | updatedAt guard → 409 (BE-018) |
+| Merge orders | Non-atomic | Single transaction (BE-019) |
+| Variance threshold | Unused | Enforced with notes override (BE-013) |
 
 ---
 
 ## 8. Commit log (this branch, remediation)
 
 ```
+786b354 fix(tables) BE-019: merge/unmerge orders atomic in one transaction
+588bdd1 fix(menu) BE-018: optimistic concurrency on updateMenuItem (updatedAt guard)
+5ad9172 fix(expenses) BE-017: expense create/update/delete + audit log in single transaction
+ad08197 fix(cash-shifts) BE-012/BE-013: document drawer formula; enforce variance threshold with notes override
+9d1365d perf(reports) PERF-001: aggregate report summary in SQL — no full order findMany
+c3c4f23 docs: REMEDIATION_REPORT — Phase 8 statuses, residual list, gates 154/154
 e7401ee fix(api) BE-002/003/004: Cairo day/week boundaries via shared cairo-time util
 0fb378c fix(api) BE-022: return after fileFilter reject (never double-callback)
 c12f0f0 fix(api) BE-008: generic 403 message — do not leak required roles
@@ -232,5 +254,5 @@ b87636d fix(db): DB-002 settings columns + DB-005 one-open-shift unique index
 
 1. **Rotate** any historically leaked seed passwords on live `tastytable` (admin/kitchen/waiter/cashier).
 2. Confirm tax policy with product: if “discount after tax” is required, swap `applyDiscount` off `rebaseTaxAfterDiscount`.
-3. Schedule follow-ups: PERF-001 (report summary SQL), BE-017 (expense audit txn), BE-018/019 (TOCTOU), BE-012/013 (cash close).
+3. Optional: tune `cashShiftVarianceThreshold` (default 50) per store; cashiers must attach notes when closing outside threshold.
 4. Do **not** `migrate reset` / `db push --force` on live `tastytable`; backup path in header.
