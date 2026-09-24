@@ -175,6 +175,8 @@ export class PaymentsService {
           idempotencyKey,
           actorId: actorId || null,
           refundedPaymentId: refundedPaymentId || null,
+          // BE-010: when the actor is also the approver, keep approvedById
+          // so the audit trail explicitly records a self-approval.
           approvedById: amount < 0 ? (approvedById || actorId || null) : null,
           cashShiftId: cashShiftId || null,
           reason: reason || null,
