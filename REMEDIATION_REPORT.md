@@ -18,6 +18,7 @@ Backup (before work): `C:\Users\Yossef\AppData\Local\Temp\opencode\tastytable_ba
 | 5 | Lint cleanup FE + API | Done — API 0 errors; FE 0 errors / 6 pre-existing warnings |
 | 6 | Tests green | Done — API 139/139; FE 10/10 |
 | 7 | Clean-DB proof + report | Done — empty DB migrate+seed+API probe 200; report below |
+| 8 | Deferred HIGH/MED security + TZ | Done — BE-001/002/003/004/007/008/022 fixed; API tests **154/154** |
 
 **Gates (after)**
 
@@ -27,8 +28,8 @@ Backup (before work): `C:\Users\Yossef\AppData\Local\Temp\opencode\tastytable_ba
 | FE lint | `npm run lint` | **0 errors**, 6 warnings (pre-existing `react-refresh`) |
 | FE tests | `npm test` | **10/10 pass** |
 | API typecheck | `npx tsc --noEmit` | **exit 0** |
-| API lint | `npm run lint` | **exit 0** (0 errors) |
-| API tests | `npx jest` | **14 suites / 139 tests pass** |
+| API lint | `npm run lint` / `npx eslint src` | **exit 0** (0 errors) |
+| API tests | `npx jest` | **15 suites / 154 tests pass** (Phase 8) |
 | Clean DB migrate | `prisma migrate deploy` on empty `tastytable_scratch2` | **exit 0** (18 migrations) |
 | Clean DB seed | `prisma db seed` | **exit 0** (users/menu/inventory/orders/settings) |
 | API probe | `GET /api/settings` on seeded scratch | **HTTP 200** full settings shape |
@@ -52,14 +53,14 @@ Legend: **FIXED** = code changed + verified; **VERIFIED** = finding confirmed, c
 | CFG-001 | HIGH | **VERIFIED** | Pre-existing CORS default; env-driven (prior P3 commits) — not re-changed this branch |
 | CFG-002 | HIGH | **FIXED** | Phase 3 FE `tsc` gate now exit 0 |
 | CFG-005 | LOW | **FIXED** | `a593b62` same as DB-006 (duplicate) |
-| BE-001 | HIGH | **DEFER** | Staff throttler bypass — out of this phase’s commit list; residual risk noted §6 |
-| BE-002 | MEDIUM | **VERIFIED** | TZ week bucket risk confirmed by code shape; full TZ test proof **not** added this pass — residual |
-| BE-003 | MEDIUM | **DEFER** | Dashboard `startOfDay` server-TZ — residual (same class as BE-002) |
-| BE-004 | MEDIUM | **DEFER** | Expenses/inventory `setHours` server-TZ — residual |
+| BE-001 | HIGH | **FIXED** | `a8ee71a` staff throttled at 300 req/min (was unlimited bypass) |
+| BE-002 | MEDIUM | **FIXED** | `e7401ee` `cairoWeekStartKey` + 15 unit tests (no server-TZ week math) |
+| BE-003 | MEDIUM | **FIXED** | `e7401ee` dashboard `startOfDay` = Cairo midnight via `cairoStartOfDayUtc` |
+| BE-004 | MEDIUM | **FIXED** | `e7401ee` expenses/inventory range uses `cairoDayStart`/`cairoDayEnd` |
 | BE-005 | MEDIUM | **FIXED** | `b699f8a` `rebaseTaxAfterDiscount` + tests (post-discount tax) |
 | BE-006 | MEDIUM | **FIXED** | `b699f8a` cancel only `received`/`preparing` + tests |
-| BE-007 | MEDIUM | **DEFER** | Kitchen `GET` payments over-broad — residual |
-| BE-008 | MEDIUM | **DEFER** | RolesGuard error leak — residual |
+| BE-007 | MEDIUM | **FIXED** | `47441d9` kitchen removed from `GET :id/payments` |
+| BE-008 | MEDIUM | **FIXED** | `c12f0f0` generic 403 — role list no longer echoed |
 | BE-009 | MEDIUM | **FIXED** | `499019c` shared `MONEY_EPSILON = 0.01` |
 | BE-010 | MEDIUM | **FIXED** | `35fe78f` explicit `approvedById` self-approval marker |
 | BE-011 | MEDIUM | **FIXED** | `0ac5473` P2002 → 409 + `b87636d` DB unique index |
@@ -77,7 +78,8 @@ Legend: **FIXED** = code changed + verified; **VERIFIED** = finding confirmed, c
 | PERF-001 | HIGH | **DEFER** | Report summary full-set load — residual (PERF-002 done) |
 | PERF-002 | MEDIUM | **FIXED** | `9a64f88` SQL `_sum` for today’s paid revenue |
 | CFG-012/013 | LOW | **VERIFIED** | Dual locks / scaffold name — hygiene, not changed |
-| BE-012/013/017/018/019/022 | LOW/MED | **DEFER** | Not in this phase’s commit scope — residual list §6 |
+| BE-012/013/017/018/019 | LOW/MED | **DEFER** | Not in this phase’s commit scope — residual list §6 |
+| BE-022 | LOW | **FIXED** | `0fb378c` fileFilter returns after reject |
 
 Other FE type errors (unused imports, missing types, EmptyState icon, formatPrice locale, etc.) fixed in `4b74d8d`.
 
@@ -127,6 +129,14 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 3. API built + started → `GET /api/settings` **200** with full settings JSON.
 4. Restored copy `tastytable_restored` → `migrate status` **up to date** (cleaned 1 failed duplicate `_prisma_migrations` row from an earlier partial apply).
 
+### Phase 8 — Deferred HIGH/MED security + TZ (follow-up)
+- **BE-001**: `StaffAwareThrottlerGuard` no longer returns `true` for staff; enforces 300 req/min / 60s block keyed by user id.
+- **BE-002/003/004**: new `apps/api/src/common/utils/cairo-time.ts` (+ 15 tests) — `cairoStartOfDayUtc`, `cairoEndOfDayUtc`, `cairoDayStart/End`, `cairoWeekStartKey` (pure Cairo calendar math, DST-safe via `date-fns-tz`). Wired into reports weekly buckets, dashboard `startOfDay`, expenses and inventory date ranges. Local `setHours(23,59,59,999)` eliminated.
+- **BE-007**: `GET /orders/:id/payments` → `admin|waiter|cashier` only.
+- **BE-008**: RolesGuard returns fixed generic 403 body; unit test asserts no role leakage.
+- **BE-022**: upload `fileFilter` returns after reject.
+- Gates: API **tsc 0 / eslint 0 / jest 154**; FE **tsc 0 / lint 0 errors / tests 10**.
+
 ---
 
 ## 4. Decisions Needed (product defaults applied)
@@ -144,7 +154,7 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 ## 5. Audit-report corrections
 
 1. **DB-001b (new)**: Order money-snapshot columns and `Table`/`MergedGroup` tables were **absent from migration history** (present only on live via manual/out-of-band SQL). Added `20260907000000_…`.
-2. **BE-002**: Finding confirmed by code shape; **automated TZ unit test proof not added** — treat as residual until test lands.
+2. **BE-002**: **fixed Phase 8** with `cairoWeekStartKey` + unit tests covering week mapping and midnight-UTC edge cases. Earlier residual note superseded.
 3. **DB-004 == CFG-005**, **BE-023 == FE-004**: duplicate IDs in register — treat as one fix each.
 4. **BE-024**: verified real WS behavior — gateway broadcasts globally with role rooms only for join; no tenant rooms. Documented, not redesigned.
 5. **Plan note**: “vue-tsc-equivalent” in the original remediation plan was a copy-paste error — this repo uses **`tsc --noEmit`** for FE.
@@ -155,13 +165,8 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 
 | Area | IDs | Note |
 |---|---|---|
-| Throttling | BE-001 | Staff bypass rate limits — security follow-up |
-| Timezone buckets | BE-002, BE-003, BE-004 | Cairo day/week boundaries — needs dedicated TZ tests |
-| Payments RBAC | BE-007 | Kitchen can list payments |
-| RolesGuard messages | BE-008 | Possible role disclosure |
 | Perf reports | PERF-001 | Summary still loads large order sets |
 | Menu/merge TOCTOU | BE-018, BE-019 | Probable, not fixed this pass |
-| Upload double-cb | BE-022 | `fileFilter` missing return |
 | Expense audit | BE-017 | Audit outside transaction |
 | Cash close / variance | BE-012, BE-013 | Non-cash refunds; threshold unused |
 | Git secret history | — | Old seed passwords in commits; **rotate live credentials**, do not rewrite history without explicit ops decision |
@@ -175,7 +180,7 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 |---|---|---|
 | Clean DB `migrate deploy` | Fail (P3006/P1014 missing Payment/settings/Order money/Table) | **Pass** |
 | API `tsc --noEmit` | Pass (baseline) | **Pass** |
-| API jest | 134 (with fixed fixtures) | **139 pass** |
+| API jest | 134 (with fixed fixtures) | **154 pass** (15 suites, Phase 8) |
 | API lint | 85+ errors | **0 errors** |
 | FE `tsc --noEmit` | **Fail** (many errors) | **Pass** |
 | FE lint | ~124 problems | **0 errors** / 6 warnings |
@@ -184,12 +189,23 @@ Other FE type errors (unused imports, missing types, EmptyState icon, formatPric
 | Payment status | Server 3-state; FE dropped partial | FE handles `partially_paid` |
 | Discount tax | Pre-discount base | Post-discount rebase |
 | Dashboard revenue | JS filter | SQL aggregate |
+| Staff rate limit | Unlimited bypass | 300 req/min (BE-001) |
+| Cairo day/week buckets | Server-TZ dependent | Shared `cairo-time` + tests (BE-002/003/004) |
+| Kitchen payments read | Allowed | Denied (BE-007) |
+| RolesGuard 403 body | Echoed role list | Generic message (BE-008) |
+| Upload fileFilter | Double-callback | Return after reject (BE-022) |
 
 ---
 
 ## 8. Commit log (this branch, remediation)
 
 ```
+e7401ee fix(api) BE-002/003/004: Cairo day/week boundaries via shared cairo-time util
+0fb378c fix(api) BE-022: return after fileFilter reject (never double-callback)
+c12f0f0 fix(api) BE-008: generic 403 message — do not leak required roles
+47441d9 fix(api) BE-007: remove kitchen_staff from GET order payments
+a8ee71a fix(api) BE-001: staff throttled at 300 req/min instead of unlimited bypass
+0c9aeed docs: REMEDIATION_REPORT — per-ID status, decisions, gates, residual risks
 22393c2 chore(lint) Phase 5: eliminate all no-explicit-any, empty blocks, constant expressions; fix react-hooks deps
 74c27b2 docs(ws) BE-024: document single-tenant broadcast (no room isolation)
 9a64f88 perf(dashboard) PERF-002: aggregate today's paid revenue in SQL
@@ -216,5 +232,5 @@ b87636d fix(db): DB-002 settings columns + DB-005 one-open-shift unique index
 
 1. **Rotate** any historically leaked seed passwords on live `tastytable` (admin/kitchen/waiter/cashier).
 2. Confirm tax policy with product: if “discount after tax” is required, swap `applyDiscount` off `rebaseTaxAfterDiscount`.
-3. Schedule follow-ups: BE-001 throttler, BE-002/003/004 TZ tests, BE-007 payments RBAC, PERF-001.
+3. Schedule follow-ups: PERF-001 (report summary SQL), BE-017 (expense audit txn), BE-018/019 (TOCTOU), BE-012/013 (cash close).
 4. Do **not** `migrate reset` / `db push --force` on live `tastytable`; backup path in header.
