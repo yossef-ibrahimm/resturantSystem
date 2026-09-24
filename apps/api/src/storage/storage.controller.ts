@@ -16,7 +16,9 @@ export class StorageController {
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.startsWith("image/")) {
+          // BE-022: must return after reject — never call cb twice.
           cb(new BadRequestException("Only image files are allowed"), false);
+          return;
         }
         cb(null, true);
       },
