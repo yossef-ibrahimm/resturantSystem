@@ -27,9 +27,8 @@ export class RolesGuard {
     }
 
     if (!requiredRoles.includes(user.role)) {
-      throw new ForbiddenException(
-        `User role "${user.role}" is not authorized. Required: ${requiredRoles.join(", ")}`
-      );
+      // BE-008: do not echo caller role or required role list (info disclosure).
+      throw new ForbiddenException("You do not have permission to perform this action");
     }
 
     return true;

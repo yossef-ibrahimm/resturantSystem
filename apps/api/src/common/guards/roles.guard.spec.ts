@@ -54,15 +54,19 @@ describe("RolesGuard", () => {
     expect(guard.canActivate(mockContext({ role: "waiter" }))).toBe(true);
   });
 
-  it("throws ForbiddenException with descriptive message on role mismatch", () => {
+  it("throws ForbiddenException with generic message on role mismatch (BE-008)", () => {
     jest.spyOn(reflector, "getAllAndOverride").mockReturnValue(["admin"]);
     try {
       guard.canActivate(mockContext({ role: "waiter" }));
       fail("Expected ForbiddenException");
     } catch (e) {
       expect(e).toBeInstanceOf(ForbiddenException);
-      expect((e as ForbiddenException).message).toContain("waiter");
-      expect((e as ForbiddenException).message).toContain("admin");
+      expect((e as ForbiddenException).message).toBe(
+        "You do not have permission to perform this action",
+      );
+      // Must not leak caller role or required role list
+      expect((e as ForbiddenException).message).not.toContain("waiter");
+      expect((e as ForbiddenException).message).not.toContain("admin");
     }
   });
 });
