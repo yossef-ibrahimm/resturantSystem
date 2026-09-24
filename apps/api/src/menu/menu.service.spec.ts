@@ -9,7 +9,15 @@ describe("MenuService", () => {
   let service: MenuService;
   let prisma: {
     category: { findMany: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
-    menuItem: { findMany: jest.Mock; findFirst: jest.Mock; create: jest.Mock; update: jest.Mock; count: jest.Mock };
+    menuItem: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+      count: jest.Mock;
+    };
   };
   let notifications: { create: jest.Mock; resolveBySource: jest.Mock };
   let gateway: { broadcastMenuAvailability: jest.Mock };
@@ -34,7 +42,15 @@ describe("MenuService", () => {
   beforeEach(async () => {
     prisma = {
       category: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-      menuItem: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
+      menuItem: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        count: jest.fn(),
+      },
     };
     notifications = { create: jest.fn(), resolveBySource: jest.fn() };
     gateway = { broadcastMenuAvailability: jest.fn() };
@@ -120,7 +136,8 @@ describe("MenuService", () => {
 
     it("updateMenuItem broadcasts when availability changes to false", async () => {
       prisma.menuItem.findFirst.mockResolvedValue({ ...mockItem, available: true });
-      prisma.menuItem.update.mockResolvedValue({ ...mockItem, available: false });
+      prisma.menuItem.updateMany.mockResolvedValue({ count: 1 });
+      prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ ...mockItem, available: false });
 
       await service.updateMenuItem("m1", { available: false });
 
@@ -135,7 +152,8 @@ describe("MenuService", () => {
 
     it("updateMenuItem resolves notification when availability changes to true", async () => {
       prisma.menuItem.findFirst.mockResolvedValue({ ...mockItem, available: false });
-      prisma.menuItem.update.mockResolvedValue({ ...mockItem, available: true });
+      prisma.menuItem.updateMany.mockResolvedValue({ count: 1 });
+      prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ ...mockItem, available: true });
 
       await service.updateMenuItem("m1", { available: true });
 
@@ -144,16 +162,27 @@ describe("MenuService", () => {
 
     it("updateMenuItem does not broadcast when availability unchanged", async () => {
       prisma.menuItem.findFirst.mockResolvedValue({ ...mockItem, available: true });
-      prisma.menuItem.update.mockResolvedValue({ ...mockItem, available: true });
+      prisma.menuItem.updateMany.mockResolvedValue({ count: 1 });
+      prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ ...mockItem, available: true });
 
       await service.updateMenuItem("m1", { nameEn: "New Name" });
 
       expect(gateway.broadcastMenuAvailability).not.toHaveBeenCalled();
     });
 
+    it("updateMenuItem rejects on concurrent modification (BE-018)", async () => {
+      prisma.menuItem.findFirst.mockResolvedValue({ ...mockItem, updatedAt: new Date("2026-01-01") });
+      prisma.menuItem.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.updateMenuItem("m1", { nameEn: "Race" })).rejects.toThrow(
+        /modified concurrently/
+      );
+      expect(prisma.menuItem.findUniqueOrThrow).not.toHaveBeenCalled();
+    });
+
     it("rejects a negative price on update", async () => {
       await expect(service.updateMenuItem("m1", { price: -1 })).rejects.toThrow(BadRequestException);
-      expect(prisma.menuItem.update).not.toHaveBeenCalled();
+      expect(prisma.menuItem.updateMany).not.toHaveBeenCalled();
     });
 
     it("deleteMenuItem soft-deletes and broadcasts when item was available", async () => {

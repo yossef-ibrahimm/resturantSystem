@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -93,17 +93,30 @@ export class MenuService {
     }>
   ) {
     if (data.price !== undefined) this.validatePrice(data.price);
+
+    // BE-018: optimistic concurrency — conditional write on updatedAt so a
+    // concurrent edit cannot silently clobber (read-then-write TOCTOU).
     const existing = await this.prisma.menuItem.findFirst({
       where: { id, deletedAt: null },
     });
+    if (!existing) {
+      throw new BadRequestException("Menu item not found");
+    }
 
-    const item = await this.prisma.menuItem.update({
-      where: { id },
+    const result = await this.prisma.menuItem.updateMany({
+      where: { id, deletedAt: null, updatedAt: existing.updatedAt },
       data,
+    });
+    if (result.count === 0) {
+      throw new ConflictException("Menu item was modified concurrently — refresh and retry");
+    }
+
+    const item = await this.prisma.menuItem.findUniqueOrThrow({
+      where: { id },
       include: { variants: true },
     });
 
-    if (existing && data.available !== undefined && data.available !== existing.available) {
+    if (data.available !== undefined && data.available !== existing.available) {
       this.gateway.broadcastMenuAvailability({ menuItemId: id, available: data.available });
 
       if (!data.available) {
