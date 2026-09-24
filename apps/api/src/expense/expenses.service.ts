@@ -113,68 +113,71 @@ export class ExpensesService {
       throw new BadRequestException("Amount must be greater than 0");
     }
 
-    // Validate sub-category exists and is active
-    const subCat = await this.prisma.subExpenseCategory.findFirst({
-      where: { id: data.subCategoryId, deletedAt: null, active: true },
-    });
-    if (!subCat) {
-      throw new BadRequestException("Sub-category not found or inactive");
-    }
-
-    // Validate main category is active
-    const mainCat = await this.prisma.mainExpenseCategory.findFirst({
-      where: { id: subCat.mainCategoryId, deletedAt: null, active: true },
-    });
-    if (!mainCat) {
-      throw new BadRequestException("Main category is inactive");
-    }
-
-    let cashShiftId = data.cashShiftId;
-    if ((data.paymentMethod || "cash") === "cash") {
-      const shift = await this.prisma.cashShift.findFirst({
-        where: cashShiftId ? { id: cashShiftId, status: "open" } : { status: "open" },
-        orderBy: { openedAt: "desc" },
+    // BE-017: expense + audit log in one transaction so a failed audit
+    // cannot leave an unaudited expense (or vice versa).
+    return this.prisma.$transaction(async (tx) => {
+      const subCat = await tx.subExpenseCategory.findFirst({
+        where: { id: data.subCategoryId, deletedAt: null, active: true },
       });
-      if (!shift) {
-        throw new BadRequestException("No cash shift is open. Open a shift before recording a cash expense.");
+      if (!subCat) {
+        throw new BadRequestException("Sub-category not found or inactive");
       }
-      cashShiftId = shift.id;
-    } else if (cashShiftId) {
-      const shift = await this.prisma.cashShift.findFirst({ where: { id: cashShiftId, status: "open" } });
-      if (!shift) throw new BadRequestException("Cash shift not found or already closed");
-    }
 
-    const expense = await this.prisma.expense.create({
-      data: {
-        subCategoryId: data.subCategoryId,
-        amount: new Prisma.Decimal(data.amount),
-        spentAt: new Date(data.spentAt),
-        paymentMethod: data.paymentMethod || "cash",
-        description: data.description,
-        note: data.note || null,
-        receiptUrl: data.receiptUrl || null,
-        recordedById: data.recordedById || null,
-        cashShiftId: cashShiftId || null,
-      },
-      include: {
-        subCategory: {
-          include: { mainCategory: { select: { id: true, nameAr: true, nameEn: true } } },
+      const mainCat = await tx.mainExpenseCategory.findFirst({
+        where: { id: subCat.mainCategoryId, deletedAt: null, active: true },
+      });
+      if (!mainCat) {
+        throw new BadRequestException("Main category is inactive");
+      }
+
+      let cashShiftId = data.cashShiftId;
+      if ((data.paymentMethod || "cash") === "cash") {
+        const shift = await tx.cashShift.findFirst({
+          where: cashShiftId ? { id: cashShiftId, status: "open" } : { status: "open" },
+          orderBy: { openedAt: "desc" },
+        });
+        if (!shift) {
+          throw new BadRequestException(
+            "No cash shift is open. Open a shift before recording a cash expense."
+          );
+        }
+        cashShiftId = shift.id;
+      } else if (cashShiftId) {
+        const shift = await tx.cashShift.findFirst({ where: { id: cashShiftId, status: "open" } });
+        if (!shift) throw new BadRequestException("Cash shift not found or already closed");
+      }
+
+      const expense = await tx.expense.create({
+        data: {
+          subCategoryId: data.subCategoryId,
+          amount: new Prisma.Decimal(data.amount),
+          spentAt: new Date(data.spentAt),
+          paymentMethod: data.paymentMethod || "cash",
+          description: data.description,
+          note: data.note || null,
+          receiptUrl: data.receiptUrl || null,
+          recordedById: data.recordedById || null,
+          cashShiftId: cashShiftId || null,
         },
-      },
-    });
+        include: {
+          subCategory: {
+            include: { mainCategory: { select: { id: true, nameAr: true, nameEn: true } } },
+          },
+        },
+      });
 
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        action: "expense.create",
-        entityType: "Expense",
-        entityId: expense.id,
-        userId: data.recordedById || null,
-        afterJson: { ...expense, amount: Number(expense.amount) } as Prisma.InputJsonValue,
-      },
-    });
+      await tx.auditLog.create({
+        data: {
+          action: "expense.create",
+          entityType: "Expense",
+          entityId: expense.id,
+          userId: data.recordedById || null,
+          afterJson: { ...expense, amount: Number(expense.amount) } as Prisma.InputJsonValue,
+        },
+      });
 
-    return { ...expense, amount: Number(expense.amount) };
+      return { ...expense, amount: Number(expense.amount) };
+    });
   }
 
   async update(
@@ -189,64 +192,81 @@ export class ExpensesService {
       receiptUrl: string;
     }>
   ) {
-    const existing = await this.prisma.expense.findFirst({
-      where: { id, deletedAt: null },
-    });
-    if (!existing) throw new NotFoundException("Expense not found");
-
-    if (data.subCategoryId) {
-      const subCat = await this.prisma.subExpenseCategory.findFirst({
-        where: { id: data.subCategoryId, deletedAt: null, active: true },
+    // BE-017: read + validate + write + audit in one transaction; update is audited.
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.expense.findFirst({
+        where: { id, deletedAt: null },
       });
-      if (!subCat) throw new BadRequestException("Sub-category not found or inactive");
-    }
+      if (!existing) throw new NotFoundException("Expense not found");
 
-    if (data.amount !== undefined && data.amount <= 0) {
-      throw new BadRequestException("Amount must be greater than 0");
-    }
+      if (data.subCategoryId) {
+        const subCat = await tx.subExpenseCategory.findFirst({
+          where: { id: data.subCategoryId, deletedAt: null, active: true },
+        });
+        if (!subCat) throw new BadRequestException("Sub-category not found or inactive");
+      }
 
-    const updateData: Prisma.ExpenseUpdateInput = { ...data };
-    if (data.amount !== undefined) {
-      updateData.amount = new Prisma.Decimal(data.amount);
-    }
-    if (data.spentAt) {
-      updateData.spentAt = new Date(data.spentAt);
-    }
+      if (data.amount !== undefined && data.amount <= 0) {
+        throw new BadRequestException("Amount must be greater than 0");
+      }
 
-    const expense = await this.prisma.expense.update({
-      where: { id },
-      data: updateData,
-      include: {
-        subCategory: {
-          include: { mainCategory: { select: { id: true, nameAr: true, nameEn: true } } },
+      const updateData: Prisma.ExpenseUpdateInput = { ...data };
+      if (data.amount !== undefined) {
+        updateData.amount = new Prisma.Decimal(data.amount);
+      }
+      if (data.spentAt) {
+        updateData.spentAt = new Date(data.spentAt);
+      }
+
+      const expense = await tx.expense.update({
+        where: { id },
+        data: updateData,
+        include: {
+          subCategory: {
+            include: { mainCategory: { select: { id: true, nameAr: true, nameEn: true } } },
+          },
         },
-      },
-    });
+      });
 
-    return { ...expense, amount: Number(expense.amount) };
+      await tx.auditLog.create({
+        data: {
+          action: "expense.update",
+          entityType: "Expense",
+          entityId: id,
+          userId: existing.recordedById,
+          beforeJson: { ...existing, amount: Number(existing.amount) } as Prisma.InputJsonValue,
+          afterJson: { ...expense, amount: Number(expense.amount) } as Prisma.InputJsonValue,
+        },
+      });
+
+      return { ...expense, amount: Number(expense.amount) };
+    });
   }
 
   async delete(id: string) {
-    const expense = await this.prisma.expense.findFirst({
-      where: { id, deletedAt: null },
-    });
-    if (!expense) throw new NotFoundException("Expense not found");
+    return this.prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.findFirst({
+        where: { id, deletedAt: null },
+      });
+      if (!expense) throw new NotFoundException("Expense not found");
 
-    await this.prisma.expense.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+      await tx.expense.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
 
-    await this.prisma.auditLog.create({
-      data: {
-        action: "expense.delete",
-        entityType: "Expense",
-        entityId: id,
-        beforeJson: { ...expense, amount: Number(expense.amount) } as Prisma.InputJsonValue,
-      },
-    });
+      await tx.auditLog.create({
+        data: {
+          action: "expense.delete",
+          entityType: "Expense",
+          entityId: id,
+          userId: expense.recordedById,
+          beforeJson: { ...expense, amount: Number(expense.amount) } as Prisma.InputJsonValue,
+        },
+      });
 
-    return { success: true };
+      return { success: true };
+    });
   }
 
   async getSummary(params?: { from?: string; to?: string; mainCategoryId?: string; paymentMethod?: string; search?: string }) {
