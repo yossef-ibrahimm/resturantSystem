@@ -1,9 +1,27 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { WebsocketGateway } from "../websocket/websocket.gateway";
+import { num } from "../common/utils/decimal.util";
+
+type MenuItemWithVariants = Prisma.MenuItemGetPayload<{ include: { variants: true } }>;
+
+function serializeMenuItem(item: MenuItemWithVariants) {
+  return {
+    ...item,
+    price: num(item.price),
+    variants: item.variants.map((v) => ({ ...v, priceAdjust: num(v.priceAdjust) })),
+  };
+}
 
 @Injectable()
 export class MenuService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+    private gateway: WebsocketGateway,
+  ) {}
 
   // Categories
   async findAllCategories() {
@@ -30,18 +48,20 @@ export class MenuService {
 
   // Menu Items
   async findAllMenuItems() {
-    return this.prisma.menuItem.findMany({
+    const items = await this.prisma.menuItem.findMany({
       where: { deletedAt: null },
       include: { variants: true },
       orderBy: { createdAt: "asc" },
     });
+    return items.map(serializeMenuItem);
   }
 
   async findMenuItem(id: string) {
-    return this.prisma.menuItem.findFirst({
+    const item = await this.prisma.menuItem.findFirst({
       where: { id, deletedAt: null },
       include: { variants: true },
     });
+    return item ? serializeMenuItem(item) : null;
   }
 
   async createMenuItem(data: {
@@ -54,7 +74,9 @@ export class MenuService {
     image?: string;
     available?: boolean;
   }) {
-    return this.prisma.menuItem.create({ data, include: { variants: true } });
+    this.validatePrice(data.price);
+    const item = await this.prisma.menuItem.create({ data, include: { variants: true } });
+    return serializeMenuItem(item);
   }
 
   async updateMenuItem(
@@ -70,18 +92,72 @@ export class MenuService {
       available: boolean;
     }>
   ) {
-    return this.prisma.menuItem.update({
+    if (data.price !== undefined) this.validatePrice(data.price);
+    const existing = await this.prisma.menuItem.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    const item = await this.prisma.menuItem.update({
       where: { id },
       data,
       include: { variants: true },
     });
+
+    if (existing && data.available !== undefined && data.available !== existing.available) {
+      this.gateway.broadcastMenuAvailability({ menuItemId: id, available: data.available });
+
+      if (!data.available) {
+        await this.notificationsService.create({
+          type: "menu_out_of_stock",
+          titleAr: `غير متاح: ${item.nameAr}`,
+          titleEn: `Out of Stock: ${item.nameEn}`,
+          messageAr: `الطبق «${item.nameAr}» أصبح غير متاح للطلب`,
+          messageEn: `Menu item "${item.nameEn}" is now unavailable for ordering`,
+          sourceType: "menu",
+          sourceId: id,
+        });
+      } else {
+        await this.notificationsService.resolveBySource("menu", id);
+      }
+    }
+
+    return serializeMenuItem(item);
+  }
+
+  private validatePrice(price: number) {
+    if (!Number.isFinite(price) || price < 0) {
+      throw new BadRequestException("Price must be a non-negative amount with at most 2 decimal places");
+    }
+    const decimalPrice = new Prisma.Decimal(price);
+    if (!decimalPrice.eq(decimalPrice.toDecimalPlaces(2))) {
+      throw new BadRequestException("Price must be a non-negative amount with at most 2 decimal places");
+    }
   }
 
   async deleteMenuItem(id: string) {
-    return this.prisma.menuItem.update({
+    const existing = await this.prisma.menuItem.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    const item = await this.prisma.menuItem.update({
       where: { id },
       data: { deletedAt: new Date(), available: false },
       include: { variants: true },
     });
+
+    if (existing?.available) {
+      this.gateway.broadcastMenuAvailability({ menuItemId: id, available: false });
+      await this.notificationsService.create({
+        type: "menu_out_of_stock",
+        titleAr: `غير متاح: ${item.nameAr}`,
+        titleEn: `Out of Stock: ${item.nameEn}`,
+        messageAr: `الطبق «${item.nameAr}» أصبح غير متاح للطلب (تم الحذف)`,
+        messageEn: `Menu item "${item.nameEn}" is now unavailable for ordering (deleted)`,
+        sourceType: "menu",
+        sourceId: id,
+      });
+    }
+
+    return serializeMenuItem(item);
   }
 }

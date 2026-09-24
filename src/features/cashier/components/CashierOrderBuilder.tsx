@@ -75,8 +75,8 @@ export default function CashierOrderBuilder() {
       });
       clearCart();
       toast.success(language === "ar" ? "تم إرسال الطلب" : "Order sent to kitchen");
-    } catch (err: any) {
-      toast.error(err?.message || language === "ar" ? "فشل إرسال الطلب" : "Failed to send order");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || language === "ar" ? "فشل إرسال الطلب" : "Failed to send order");
     } finally {
       setSubmitting(false);
     }

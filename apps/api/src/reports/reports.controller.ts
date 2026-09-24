@@ -38,4 +38,14 @@ export class ReportsController {
   getUnavailableItems() {
     return this.reportsService.getUnavailableItems();
   }
+
+  @Get("table-occupancy")
+  getTableOccupancy() {
+    return this.reportsService.getTableOccupancy();
+  }
+
+  @Get("stale-tables")
+  getStaleTables() {
+    return this.reportsService.getStaleTables();
+  }
 }

@@ -17,19 +17,20 @@ export function useCashierOrders() {
     queryFn: () => getOrders(),
     refetchInterval: 5_000,
   });
+  const { refetch } = query;
 
   // WebSocket-driven invalidation
   useEffect(() => {
     if (!isAuthenticated) return;
     connectSocket();
-    const unsubNew = onSocketEvent("order:new", () => query.refetch());
-    const unsubUpd = onSocketEvent("order:updated", () => query.refetch());
+    const unsubNew = onSocketEvent("order:new", () => refetch());
+    const unsubUpd = onSocketEvent("order:updated", () => refetch());
     return () => {
       unsubNew();
       unsubUpd();
       disconnectSocket();
     };
-  }, [isAuthenticated, query.refetch]);
+  }, [isAuthenticated, refetch]);
 
   return query;
 }

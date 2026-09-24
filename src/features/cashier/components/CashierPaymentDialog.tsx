@@ -222,8 +222,8 @@ export default function CashierPaymentDialog({ order, mergedGroup, onClose, hasO
               if (res?.order) {
                 latestOrders[oi] = res.order;
               }
-            } catch (err: any) {
-              failed.push({ index: paymentIdx, error: err?.message || "Failed" });
+            } catch (err: unknown) {
+              failed.push({ index: paymentIdx, error: (err instanceof Error ? err.message : undefined) || "Failed" });
             }
 
             assigned += toPay;
@@ -258,8 +258,8 @@ export default function CashierPaymentDialog({ order, mergedGroup, onClose, hasO
             if (res?.order) {
               latestOrders[0] = res.order;
             }
-          } catch (err: any) {
-            failed.push({ index: i, error: err?.message || "Failed" });
+          } catch (err: unknown) {
+            failed.push({ index: i, error: (err instanceof Error ? err.message : undefined) || "Failed" });
           }
         }
       }
@@ -319,8 +319,8 @@ export default function CashierPaymentDialog({ order, mergedGroup, onClose, hasO
       } else {
         toast.error(language === "ar" ? "فشل جميع الدفعات" : "All payments failed");
       }
-    } catch (err: any) {
-      toast.error(err?.message || (language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error"));
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || (language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error"));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -622,7 +622,7 @@ export default function CashierPaymentDialog({ order, mergedGroup, onClose, hasO
           <Label className="text-xs">{isArabic ? "إضافة دفعة" : "Add Payment"}</Label>
           <RadioGroup
             value={method}
-            onValueChange={(v) => setMethod(v as any)}
+            onValueChange={(v) => setMethod(v as "cash" | "card" | "wallet" | "other")}
             className="flex gap-2"
           >
             {(["cash", "card", "wallet", "other"] as const).map((m) => {

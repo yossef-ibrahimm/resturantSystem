@@ -161,7 +161,9 @@ export default function StaffReportPage() {
       if (reqId !== abortRef.current) return;
       setRecords(rec);
       setSummary(sum);
-    } catch {} finally {
+    } catch {
+      // ignore — leave prior state
+    } finally {
       if (reqId === abortRef.current) setLoading(false);
     }
   }, []);

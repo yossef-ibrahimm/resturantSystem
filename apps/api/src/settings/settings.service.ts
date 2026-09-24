@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import type { RestaurantSettings } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { WebsocketGateway } from "../websocket/websocket.gateway";
 
@@ -64,7 +65,7 @@ export class SettingsService {
 
   // Prisma returns Decimal fields as strings in JSON. Convert them to numbers
   // so the frontend never gets string surprises for numeric fields.
-  private serialize(settings: any) {
+  private serialize(settings: RestaurantSettings) {
     const toNum = (v: unknown, fallback: number): number => {
       if (v === undefined || v === null || v === "") return fallback;
       const n = Number(v);
@@ -107,7 +108,7 @@ export class SettingsService {
     });
 
     const serialized = this.serialize(settings);
-    this.wsGateway.broadcastSettingsUpdate(serialized as any);
+    this.wsGateway.broadcastSettingsUpdate(serialized as unknown as RestaurantSettings);
 
     return serialized;
   }
@@ -122,7 +123,7 @@ export class SettingsService {
     });
 
     const serialized = this.serialize(settings);
-    this.wsGateway.broadcastSettingsUpdate(serialized as any);
+    this.wsGateway.broadcastSettingsUpdate(serialized as unknown as RestaurantSettings);
 
     return serialized;
   }

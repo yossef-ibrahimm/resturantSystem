@@ -48,8 +48,8 @@ export default function CashShiftManager({ currentShift, onShiftOpened, onShiftC
       toast.success(language === "ar" ? "تم فتح الوردية" : "Shift opened");
       onShiftOpened(shift);
       setOpenDialog(false);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to open shift");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || "Failed to open shift");
     } finally {
       setLoading(false);
     }
@@ -87,8 +87,8 @@ export default function CashShiftManager({ currentShift, onShiftOpened, onShiftC
       onShiftClosed();
       setCloseDialog(false);
       setClosingFloat("");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to close shift");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || "Failed to close shift");
     } finally {
       setLoading(false);
     }

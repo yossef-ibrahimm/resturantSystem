@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useLanguage } from "@/i18n";
 import { getMenuItems, getCategories, createMenuItem, updateMenuItem, deleteMenuItem, createCategory, deleteCategory } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
@@ -11,11 +14,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, UtensilsCrossed, FolderPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
+import ImageUploader from "@/components/ImageUploader";
 import type { MenuItem, Category } from "@/lib/types";
+
+const menuItemSchema = z.object({
+  nameAr: z.string().min(1),
+  nameEn: z.string().min(1),
+  descriptionAr: z.string().optional(),
+  descriptionEn: z.string().optional(),
+  price: z.coerce.number().min(0, "Price must be 0 or greater"),
+  categoryId: z.string().min(1),
+  available: z.boolean(),
+  image: z.string().optional(),
+});
+
+type MenuItemFormData = z.infer<typeof menuItemSchema>;
+
+const categorySchema = z.object({
+  nameAr: z.string().min(1),
+  nameEn: z.string().min(1),
+});
+
+type CategoryFormData = z.infer<typeof categorySchema>;
 
 export default function MenuManagement() {
   const { t, isArabic, language } = useLanguage();
@@ -27,19 +50,27 @@ export default function MenuManagement() {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [catDialogOpen, setCatDialogOpen] = useState(false);
-  const [newCatAr, setNewCatAr] = useState("");
-  const [newCatEn, setNewCatEn] = useState("");
 
-  // Form state
-  const [form, setForm] = useState({
-    nameAr: "",
-    nameEn: "",
-    descriptionAr: "",
-    descriptionEn: "",
-    price: "",
-    categoryId: "",
-    available: true,
-    image: "",
+  const {
+    register: registerItem,
+    handleSubmit: handleSubmitItem,
+    setValue: setItemValue,
+    watch: watchItem,
+    reset: resetItem,
+    formState: { errors: itemErrors },
+  } = useForm<MenuItemFormData>({
+    resolver: zodResolver(menuItemSchema),
+    defaultValues: { nameAr: "", nameEn: "", descriptionAr: "", descriptionEn: "", price: 0, categoryId: "", available: true, image: "" },
+  });
+
+  const {
+    register: registerCat,
+    handleSubmit: handleSubmitCat,
+    reset: resetCat,
+    formState: { errors: catErrors },
+  } = useForm<CategoryFormData>({
+    resolver: zodResolver(categorySchema),
+    defaultValues: { nameAr: "", nameEn: "" },
   });
 
   const loadData = useCallback(async () => {
@@ -61,19 +92,14 @@ export default function MenuManagement() {
     ? items
     : items.filter((i) => i.categoryId === filterCategory);
 
-  const resetForm = () => {
-    setForm({ nameAr: "", nameEn: "", descriptionAr: "", descriptionEn: "", price: "", categoryId: categories[0]?.id || "", available: true, image: "" });
-    setEditingItem(null);
-  };
-
   const openEdit = (item: MenuItem) => {
     setEditingItem(item);
-    setForm({
+    resetItem({
       nameAr: item.nameAr,
       nameEn: item.nameEn,
       descriptionAr: item.descriptionAr,
       descriptionEn: item.descriptionEn,
-      price: String(item.price),
+      price: Number(item.price),
       categoryId: item.categoryId,
       available: item.available,
       image: item.image,
@@ -81,40 +107,28 @@ export default function MenuManagement() {
     setItemDialogOpen(true);
   };
 
-  const handleSaveItem = async () => {
-    if (!form.nameAr.trim() || !form.nameEn.trim()) {
-      toast.error(isArabic ? "أدخل اسم الطبق بالعربية والإنجليزية" : "Enter item name in both languages");
-      return;
-    }
-    if (!form.price || Number(form.price) <= 0) {
-      toast.error(isArabic ? "أدخل سعراً صالحاً" : "Enter a valid price");
-      return;
-    }
-    if (!form.categoryId) {
-      toast.error(isArabic ? "اختر فئة" : "Select a category");
-      return;
-    }
-    const data = {
-      nameAr: form.nameAr,
-      nameEn: form.nameEn,
-      descriptionAr: form.descriptionAr,
-      descriptionEn: form.descriptionEn,
-      price: Number(form.price),
-      categoryId: form.categoryId,
-      available: form.available,
-      image: form.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop",
-    };
+  const openCreate = () => {
+    setEditingItem(null);
+    resetItem({ nameAr: "", nameEn: "", descriptionAr: "", descriptionEn: "", price: 0, categoryId: categories[0]?.id || "", available: true, image: "" });
+    setItemDialogOpen(true);
+  };
 
+  const onSaveItem = async (data: MenuItemFormData) => {
+    const payload = {
+      ...data,
+      descriptionAr: data.descriptionAr || "",
+      descriptionEn: data.descriptionEn || "",
+      image: data.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop",
+    };
     try {
       if (editingItem) {
-        await updateMenuItem(editingItem.id, data);
+        await updateMenuItem(editingItem.id, payload);
         toast.success(isArabic ? "تم تحديث الطبق" : "Item updated");
       } else {
-        await createMenuItem(data);
+        await createMenuItem(payload);
         toast.success(isArabic ? "تمت إضافة الطبق" : "Item added");
       }
       setItemDialogOpen(false);
-      resetForm();
       loadData();
     } catch {
       toast.error(t.error);
@@ -132,12 +146,10 @@ export default function MenuManagement() {
     }
   };
 
-  const handleAddCategory = async () => {
-    if (!newCatAr.trim() || !newCatEn.trim()) return;
+  const onSaveCategory = async (data: CategoryFormData) => {
     try {
-      await createCategory({ nameAr: newCatAr, nameEn: newCatEn, sortOrder: categories.length + 1 });
-      setNewCatAr("");
-      setNewCatEn("");
+      await createCategory({ nameAr: data.nameAr, nameEn: data.nameEn, sortOrder: categories.length + 1 });
+      resetCat();
       setCatDialogOpen(false);
       toast.success(isArabic ? "تمت إضافة الفئة" : "Category added");
       loadData();
@@ -176,6 +188,8 @@ export default function MenuManagement() {
     );
   }
 
+  const watchedCategoryId = watchItem("categoryId");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -192,23 +206,25 @@ export default function MenuManagement() {
               <DialogHeader>
                 <DialogTitle>{t.admin.menu.addCategory}</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <form onSubmit={handleSubmitCat(onSaveCategory)} className="space-y-4">
                 <div className="space-y-2">
                   <Label>{t.admin.menu.categoryNameAr}</Label>
-                  <Input value={newCatAr} onChange={(e) => setNewCatAr(e.target.value)} dir="rtl" />
+                  <Input {...registerCat("nameAr")} dir="rtl" />
+                  {catErrors.nameAr && <p className="text-xs text-destructive">{isArabic ? "مطلوب" : "Required"}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>{t.admin.menu.categoryNameEn}</Label>
-                  <Input value={newCatEn} onChange={(e) => setNewCatEn(e.target.value)} />
+                  <Input {...registerCat("nameEn")} />
+                  {catErrors.nameEn && <p className="text-xs text-destructive">{isArabic ? "مطلوب" : "Required"}</p>}
                 </div>
-                <Button onClick={handleAddCategory} className="w-full">{t.save}</Button>
-              </div>
+                <Button type="submit" className="w-full">{t.save}</Button>
+              </form>
             </DialogContent>
           </Dialog>
 
-          <Dialog open={itemDialogOpen} onOpenChange={(open) => { setItemDialogOpen(open); if (!open) resetForm(); }}>
+          <Dialog open={itemDialogOpen} onOpenChange={(open) => { setItemDialogOpen(open); if (!open) { resetItem(); setEditingItem(null); } }}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={resetForm}>
+              <Button size="sm" onClick={openCreate}>
                 <Plus className="h-4 w-4 me-2" />
                 {t.admin.menu.addItem}
               </Button>
@@ -217,35 +233,38 @@ export default function MenuManagement() {
               <DialogHeader>
                 <DialogTitle>{editingItem ? t.admin.menu.editItem : t.admin.menu.addItem}</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <form onSubmit={handleSubmitItem(onSaveItem)} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t.admin.menu.itemNameAr}</Label>
-                    <Input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} dir="rtl" />
+                    <Input {...registerItem("nameAr")} dir="rtl" />
+                    {itemErrors.nameAr && <p className="text-xs text-destructive">{isArabic ? "مطلوب" : "Required"}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>{t.admin.menu.itemNameEn}</Label>
-                    <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} />
+                    <Input {...registerItem("nameEn")} />
+                    {itemErrors.nameEn && <p className="text-xs text-destructive">{isArabic ? "مطلوب" : "Required"}</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t.admin.menu.descriptionAr}</Label>
-                    <Textarea value={form.descriptionAr} onChange={(e) => setForm({ ...form, descriptionAr: e.target.value })} dir="rtl" rows={2} />
+                    <Textarea {...registerItem("descriptionAr")} dir="rtl" rows={2} />
                   </div>
                   <div className="space-y-2">
                     <Label>{t.admin.menu.descriptionEn}</Label>
-                    <Textarea value={form.descriptionEn} onChange={(e) => setForm({ ...form, descriptionEn: e.target.value })} rows={2} />
+                    <Textarea {...registerItem("descriptionEn")} rows={2} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t.admin.menu.price}</Label>
-                    <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} dir="ltr" />
+                    <Input type="number" step="0.01" {...registerItem("price")} dir="ltr" />
+                    {itemErrors.price && <p className="text-xs text-destructive">{isArabic ? "سعر غير صالح" : "Invalid price"}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>{t.admin.menu.category}</Label>
-                    <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
+                    <Select value={watchedCategoryId} onValueChange={(v) => setItemValue("categoryId", v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
@@ -253,18 +272,20 @@ export default function MenuManagement() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {itemErrors.categoryId && <p className="text-xs text-destructive">{isArabic ? "اختر فئة" : "Select a category"}</p>}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>{t.admin.menu.image}</Label>
-                  <Input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="https://..." />
-                </div>
+                <ImageUploader
+                  label={t.admin.menu.image}
+                  initialUrl={editingItem?.image}
+                  onChange={(url) => setItemValue("image", url || "")}
+                />
                 <div className="flex items-center gap-3">
-                  <Switch checked={form.available} onCheckedChange={(v) => setForm({ ...form, available: v })} />
-                  <Label>{t.admin.menu.availability}: {form.available ? t.admin.menu.inStock : t.admin.menu.outOfStock}</Label>
+                  <Switch checked={watchItem("available")} onCheckedChange={(v) => setItemValue("available", v)} />
+                  <Label>{t.admin.menu.availability}: {watchItem("available") ? t.admin.menu.inStock : t.admin.menu.outOfStock}</Label>
                 </div>
-                <Button onClick={handleSaveItem} className="w-full">{t.save}</Button>
-              </div>
+                <Button type="submit" className="w-full">{t.save}</Button>
+              </form>
             </DialogContent>
           </Dialog>
         </div>

@@ -7,9 +7,20 @@ export default defineConfig(({ mode }) => ({
   base: process.env.GITHUB_ACTIONS ? "/resturant_sys/" : "/",
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
+    strictPort: false,
     hmr: {
       overlay: false,
+    },
+    proxy: {
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+      "/socket.io": {
+        target: "http://localhost:3001",
+        ws: true,
+      },
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

@@ -266,8 +266,14 @@ export class OrdersService {
           });
         });
         break;
-      } catch (err: any) {
-        if (err?.code === "P2002" && attempt < MAX_RETRIES - 1) {
+      } catch (err: unknown) {
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          err.code === "P2002" &&
+          attempt < MAX_RETRIES - 1
+        ) {
           const [{ max }] = await this.prisma.$queryRaw<{ max: number }[]>`
             SELECT COALESCE(MAX(CAST("orderNumber" AS INTEGER)), 1000) + 1 AS max
             FROM "Order"`;

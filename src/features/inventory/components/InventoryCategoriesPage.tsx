@@ -59,7 +59,8 @@ export default function InventoryCategoriesPage() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateInventoryCategory(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateInventoryCategory>[1] }) =>
+      updateInventoryCategory(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory-categories"] });
       toast.success(isArabic ? "تم تحديث الفئة" : "Category updated");

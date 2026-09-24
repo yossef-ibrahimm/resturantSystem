@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useLanguage } from "@/i18n";
 import { getUsers, createUser, toggleUserActive, deleteUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -13,7 +16,13 @@ import { Plus, UserCheck, UserX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "@/lib/types";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const staffSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  role: z.enum(["admin", "kitchen_staff", "waiter", "cashier"]),
+});
+
+type StaffFormData = z.infer<typeof staffSchema>;
 
 export default function StaffManagement() {
   const { t, isArabic } = useLanguage();
@@ -21,8 +30,20 @@ export default function StaffManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", role: "kitchen_staff" as "admin" | "kitchen_staff" | "waiter" });
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
+  const [createdName, setCreatedName] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<StaffFormData>({
+    resolver: zodResolver(staffSchema),
+    defaultValues: { name: "", email: "", role: "kitchen_staff" },
+  });
 
   const loadUsers = useCallback(async () => {
     try {
@@ -38,21 +59,14 @@ export default function StaffManagement() {
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  const handleCreate = async () => {
-    if (!form.name.trim() || !form.email.trim()) {
-      setFormError(isArabic ? "جميع الحقول مطلوبة" : "All fields are required");
-      return;
-    }
-    if (!EMAIL_RE.test(form.email)) {
-      setFormError(isArabic ? "البريد الإلكتروني غير صالح" : "Invalid email address");
-      return;
-    }
-    setFormError("");
+  const handleCreate = async (data: StaffFormData) => {
     try {
-      await createUser({ name: form.name, email: form.email, role: form.role });
+      const created = await createUser({ name: data.name, email: data.email, role: data.role });
       toast.success(isArabic ? "تمت إضافة الموظف" : "Staff member added");
       setDialogOpen(false);
-      setForm({ name: "", email: "", role: "kitchen_staff" });
+      reset();
+      setCreatedPassword(created.temporaryPassword);
+      setCreatedName(created.name);
       loadUsers();
     } catch {
       toast.error(t.error);
@@ -99,11 +113,13 @@ export default function StaffManagement() {
     );
   }
 
+  const watchedRole = watch("role");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t.admin.staffManagement}</h1>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); setFormError(""); }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) reset(); }}>
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="h-4 w-4 me-2" />
@@ -114,31 +130,31 @@ export default function StaffManagement() {
             <DialogHeader>
               <DialogTitle>{t.admin.staff.addStaff}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              {formError && (
-                <p className="text-sm text-destructive" role="alert">{formError}</p>
-              )}
+            <form onSubmit={handleSubmit(handleCreate)} className="space-y-4">
               <div className="space-y-2">
                 <Label>{t.admin.staff.name}</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} aria-label={t.admin.staff.name} />
+                <Input {...register("name")} aria-label={t.admin.staff.name} />
+                {errors.name && <p className="text-xs text-destructive">{isArabic ? "مطلوب" : "Required"}</p>}
               </div>
               <div className="space-y-2">
                 <Label>{t.admin.staff.email}</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} aria-label={t.admin.staff.email} />
+                <Input type="email" {...register("email")} aria-label={t.admin.staff.email} />
+                {errors.email && <p className="text-xs text-destructive">{isArabic ? "بريد غير صالح" : "Invalid email"}</p>}
               </div>
               <div className="space-y-2">
                 <Label>{t.admin.staff.role}</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as "admin" | "kitchen_staff" | "waiter" })}>
+                <Select value={watchedRole} onValueChange={(v) => setValue("role", v as "admin" | "kitchen_staff" | "waiter" | "cashier")}>
                   <SelectTrigger aria-label={t.admin.staff.role}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">{isArabic ? "مدير" : "Admin"}</SelectItem>
                     <SelectItem value="kitchen_staff">{isArabic ? "موظف مطبخ" : "Kitchen Staff"}</SelectItem>
                     <SelectItem value="waiter">{isArabic ? "جرسون" : "Waiter"}</SelectItem>
+                    <SelectItem value="cashier">{isArabic ? "كاشير" : "Cashier"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleCreate} className="w-full">{t.save}</Button>
-            </div>
+              <Button type="submit" className="w-full">{t.save}</Button>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -165,7 +181,9 @@ export default function StaffManagement() {
                         ? (isArabic ? "مدير" : "Admin")
                         : user.role === "waiter"
                           ? (isArabic ? "جرسون" : "Waiter")
-                          : (isArabic ? "مطبخ" : "Kitchen")}
+                          : user.role === "cashier"
+                            ? (isArabic ? "كاشير" : "Cashier")
+                            : (isArabic ? "مطبخ" : "Kitchen")}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
@@ -194,6 +212,37 @@ export default function StaffManagement() {
           ))}
         </div>
       )}
+
+      <Dialog open={createdPassword !== null} onOpenChange={(open) => { if (!open) setCreatedPassword(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isArabic ? "كلمة مرور مؤقتة" : "Temporary Password"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {isArabic
+                ? `تم إنشاء حساب ${createdName}. شارك كلمة المرور المؤقتة مرة واحدة فقط — سيُطلب منه تغييرها عند أول تسجيل دخول.`
+                : `Account for ${createdName} created. Share this temporary password once — they will be forced to change it on first login.`}
+            </p>
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+              <code className="flex-1 font-mono text-sm font-bold tracking-wide">{createdPassword}</code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (createdPassword) navigator.clipboard.writeText(createdPassword);
+                  toast.success(isArabic ? "تم النسخ" : "Copied");
+                }}
+              >
+                {isArabic ? "نسخ" : "Copy"}
+              </Button>
+            </div>
+            <Button className="w-full" onClick={() => setCreatedPassword(null)}>
+              {t.save}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

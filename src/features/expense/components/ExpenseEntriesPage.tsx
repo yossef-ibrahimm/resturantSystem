@@ -115,7 +115,8 @@ export default function ExpenseEntriesPage() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateExpense(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateExpense>[1] }) =>
+      updateExpense(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
       queryClient.invalidateQueries({ queryKey: ["expense-summary"] });

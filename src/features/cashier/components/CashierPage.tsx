@@ -3,7 +3,7 @@ import { useLanguage } from "@/i18n";
 import { useCashierOrders } from "@/hooks/useCashierOrders";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "@/components/ui/button";
-import { LogOut, Wifi, WifiOff, Grid3X3 } from "lucide-react";
+import { LogOut, Wifi, Grid3X3 } from "lucide-react";
 import CashierMenuBrowser from "./CashierMenuBrowser";
 import CashierOrderBuilder from "./CashierOrderBuilder";
 import CashierUnpaidOrders from "./CashierUnpaidOrders";
@@ -48,11 +48,7 @@ export default function CashierPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold">{t.cashier.title}</h1>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            {true ? (
-              <><Wifi className="h-3 w-3 text-green-500" /> {t.cashier.live}</>
-            ) : (
-              <><WifiOff className="h-3 w-3 text-red-500" /> {t.cashier.offline}</>
-            )}
+            <><Wifi className="h-3 w-3 text-green-500" /> {t.cashier.live}</>
           </span>
         </div>
         <div className="flex items-center gap-3">

@@ -7,15 +7,70 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  admin
+  kitchen_staff
+  waiter
+  cashier
+}
+
+enum OrderStatus {
+  received
+  preparing
+  ready
+  completed
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  card
+  wallet
+  other
+}
+
+enum StockMovementType {
+  initial
+  purchase
+  sale
+  consumption
+  waste
+  damage
+  expired
+  adjustment_up
+  adjustment_down
+  return
+}
+
+enum NotificationType {
+  inventory_out_of_stock
+  inventory_low_stock
+  menu_out_of_stock
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         String   @default("kitchen_staff")
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  passwordHash       String
+  name               String
+  role               Role     @default(kitchen_staff)
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  attendance         Attendance[]
+  createdOrders      Order[]      @relation("orderCreatedBy")
+  preparingOrders    Order[]      @relation("orderPreparingBy")
+  readyOrders        Order[]      @relation("orderReadyBy")
+  completedOrders    Order[]      @relation("orderCompletedBy")
+  cancelledOrders    Order[]      @relation("orderCancelledBy")
+  discountedOrders   Order[]      @relation("orderDiscountedBy")
+  approvedRefunds    Payment[]    @relation("paymentApprovedBy")
+  payments           Payment[]    @relation("paymentActor")
+  openedShifts       CashShift[]  @relation("shiftOpenedBy")
+  closedShifts       CashShift[]  @relation("shiftClosedBy")
+  recordedExpenses   Expense[]    @relation("expenseRecordedBy")
+  auditLogs          AuditLog[]
 
   @@index([role])
   @@index([active])
@@ -39,12 +94,14 @@ model MenuItem {
   nameEn        String
   descriptionAr String           @default("")
   descriptionEn String           @default("")
-  price         Float
+  price         Decimal          @db.Decimal(10, 2)
   image         String           @default("")
   available     Boolean          @default(true)
   deletedAt     DateTime?
   variants      MenuItemVariant[]
   orderItems    OrderItem[]
+  recipeLines   RecipeLine[]
+  stockMode     String           @default("none") // none | units | recipe
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -54,13 +111,13 @@ model MenuItem {
 }
 
 model MenuItemVariant {
-  id          String   @id @default(uuid())
-  menuItemId  String
-  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  nameAr      String
-  nameEn      String
-  priceAdjust Float    @default(0)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  nameAr     String
+  nameEn     String
+  priceAdjust Decimal @db.Decimal(10, 2) @default(0)
+  createdAt  DateTime @default(now())
 
   @@index([menuItemId])
 }
@@ -68,22 +125,122 @@ model MenuItemVariant {
 model Order {
   id            String        @id @default(uuid())
   orderNumber   String        @unique
+  /// Opaque, non-enumerable lookup token for customer-facing endpoints.
+  /// Replaces the public "by-number" path; 4-digit orderNumber stays for display only.
+  orderToken    String        @unique @default(uuid())
+  idempotencyKey String?      @unique  // client-generated, prevents duplicate orders
   customerName  String
   phone         String?
   orderType     String
   tableNumber   Int?
+  tableId       String?
+  table         Table?       @relation(fields: [tableId], references: [id])
+  mergedGroupId String?
+  mergedGroup   MergedGroup? @relation(fields: [mergedGroupId], references: [id])
   notes         String?
   items         OrderItem[]
-  status        String        @default("received")
+  status        OrderStatus   @default(received)
   paymentStatus String        @default("unpaid")
   billRequested Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  // ── Actor attribution ──
+  createdByUserId String?
+  createdBy       User?       @relation("orderCreatedBy", fields: [createdByUserId], references: [id])
+
+  // ── Money snapshot (Phase 2) — server-computed, never client-supplied ──
+  itemsTotal     Decimal @db.Decimal(10, 2) @default(0)
+  discountAmount Decimal @db.Decimal(10, 2) @default(0)
+  discountReason String?
+  discountedById String?
+  discountedBy   User?   @relation("orderDiscountedBy", fields: [discountedById], references: [id])
+  taxRate        Decimal @db.Decimal(5, 4)  @default(0)
+  taxAmount      Decimal @db.Decimal(10, 2) @default(0)
+  serviceRate    Decimal @db.Decimal(5, 4)  @default(0)
+  serviceAmount  Decimal @db.Decimal(10, 2) @default(0)
+  total          Decimal @db.Decimal(10, 2) @default(0)
+  paidTotal      Decimal @db.Decimal(10, 2) @default(0)
+  payments       Payment[]
+  legacyBackfilled Boolean @default(false) // true for orders migrated from pre-fix data
+
+  // ── Stage audit trail (Phase 1) — who moved the order, when ──
+  preparingAt   DateTime?
+  preparingById String?
+  preparingBy   User?       @relation("orderPreparingBy", fields: [preparingById], references: [id])
+  readyAt       DateTime?
+  readyById     String?
+  readyBy       User?       @relation("orderReadyBy", fields: [readyById], references: [id])
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?       @relation("orderCompletedBy", fields: [completedById], references: [id])
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?       @relation("orderCancelledBy", fields: [cancelledById], references: [id])
+  cancelReason  String?
+
   @@index([status, createdAt])
   @@index([orderType, createdAt])
-  @@index([orderNumber])
   @@index([paymentStatus, billRequested])
+  @@index([createdAt])
+}
+
+/// Child payment records (decision: multi/partial payments).
+/// Negative amount = refund (A9), reason required.
+/// Refund model: a refund is a Payment row with amount < 0 and (optionally)
+/// refundedPaymentId pointing at the original Payment. approvedById captures
+/// the admin who authorized the refund (separate from actorId who posted it).
+model Payment {
+  id             String        @id @default(uuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod
+  actorId        String?
+  actor          User?         @relation("paymentActor", fields: [actorId], references: [id])
+  /// Set on refund payments. Points to the original Payment being refunded.
+  refundedPaymentId String?
+  refundedPayment   Payment?  @relation("PaymentRefunds", fields: [refundedPaymentId], references: [id])
+  refunds           Payment[] @relation("PaymentRefunds")
+  /// Admin who authorized this refund (separate from `actor` who posted the row).
+  approvedById  String?
+  approvedBy    User?         @relation("paymentApprovedBy", fields: [approvedById], references: [id])
+  /// Set on cash payments — ties the payment to the drawer session that owns it.
+  cashShiftId   String?
+  cashShift     CashShift?    @relation(fields: [cashShiftId], references: [id])
+  reason        String?
+  idempotencyKey String?       @unique  // server-generated, prevents duplicate payments
+  paidAt        DateTime       @default(now())
+  note          String?
+
+  @@index([orderId])
+  @@index([method, paidAt])
+  @@index([refundedPaymentId])
+  @@index([cashShiftId])
+}
+
+/// Cash drawer / shift session.
+/// One open shift at a time across the whole cafe (single-drawer policy).
+/// expectedCash at close = openingFloat + SUM(cash payments in shift) + SUM(cash refunds in shift).
+model CashShift {
+  id            String    @id @default(uuid())
+  openedById    String
+  openedBy      User      @relation("shiftOpenedBy", fields: [openedById], references: [id])
+  closedById    String?
+  closedBy      User?     @relation("shiftClosedBy", fields: [closedById], references: [id])
+  openingFloat  Decimal   @db.Decimal(10, 2)
+  closingFloat  Decimal?  @db.Decimal(10, 2)
+  expectedCash  Decimal?  @db.Decimal(10, 2) // server-computed at close
+  variance      Decimal?  @db.Decimal(10, 2) // closingFloat - expectedCash
+  status        String    @default("open")    // open | closed
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  notes         String?
+  payments      Payment[]
+  expenses      Expense[]
+
+  @@index([status])
+  @@index([openedAt])
 }
 
 model OrderCounter {
@@ -100,7 +257,7 @@ model OrderItem {
   nameAr     String
   nameEn     String
   quantity   Int
-  unitPrice  Float
+  unitPrice  Decimal  @db.Decimal(10, 2)
   variant    String?
   notes      String?
 
@@ -108,3 +265,306 @@ model OrderItem {
   @@index([menuItemId])
 }
 
+model Attendance {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clockIn   DateTime  @default(now())
+  clockOut  DateTime?
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, clockIn])
+  @@index([clockIn])
+}
+
+model RestaurantSettings {
+  id                String    @id
+  nameAr            String    @default("Tasty Table")
+  nameEn            String    @default("Tasty Table")
+  logoUrl           String?
+  menuBackgroundUrl String?
+  primaryColor      String?
+  secondaryColor    String?
+  backgroundColor   String?
+  contactPhone      String?
+  contactAddress    String?
+  workingHours      String?
+  facebookUrl       String?
+  instagramUrl      String?
+  tiktokUrl         String?
+  whatsappNumber    String?
+
+  // ── Tax & service charge (Phase 2) — default OFF, per-cafe configurable ──
+  taxEnabled        Boolean   @default(false)
+  taxRate           Decimal   @default(0) @db.Decimal(5, 4)
+  serviceEnabled    Boolean   @default(false)
+  serviceRate       Decimal   @default(0) @db.Decimal(5, 4)
+
+  // ── Cash shift variance threshold (Phase 1) — flags shifts exceeding this ──
+  cashShiftVarianceThreshold Decimal @default(50) @db.Decimal(10, 2)
+
+  // ── Table management ──
+  totalTables          Int     @default(0)    // 0 = disabled
+  tableNumberStart     Int     @default(1)
+  tableNumberEnd       Int     @default(50)
+  staleThresholdMinutes Int    @default(30)   // minutes before a table is "stale"
+
+  updatedAt         DateTime  @updatedAt
+}
+
+// ══════════════════════════════════════════════════════════════
+// Inventory & Stock (Phase 2)
+// ══════════════════════════════════════════════════════════════
+
+model InventoryCategory {
+  id          String          @id @default(uuid())
+  nameAr      String
+  nameEn      String
+  description String          @default("")
+  active      Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  items       InventoryItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([active])
+}
+
+model InventoryItem {
+  id                     String          @id @default(uuid())
+  categoryId             String
+  category               InventoryCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  nameAr                 String
+  nameEn                 String
+  code                   String?
+  description            String          @default("")
+  unit                   String          @default("pc")     // g | ml | pc | kg | l | box | bag | bottle | pack
+  qtyOnHand              Decimal         @db.Decimal(12, 3) @default(0)
+  minQty                 Decimal         @db.Decimal(12, 3) @default(0)
+  reorderPoint           Decimal         @db.Decimal(12, 3) @default(0)
+  recommendedReorderQty  Decimal         @db.Decimal(12, 3) @default(0)
+  avgUnitCost            Decimal         @db.Decimal(10, 4) @default(0)
+  active                 Boolean         @default(true)
+  deletedAt              DateTime?
+  movements              StockMovement[]
+  recipeLines            RecipeLine[]
+  countItems             InventoryCountItem[]
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([categoryId])
+  @@index([active])
+  @@index([deletedAt])
+  @@index([code])
+}
+
+model StockMovement {
+  id              String            @id @default(uuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  type            StockMovementType
+  quantity        Decimal           @db.Decimal(12, 3)  // positive = in, negative = out
+  unit            String            // unit at time of movement
+  qtyBefore       Decimal           @db.Decimal(12, 3)
+  qtyAfter        Decimal           @db.Decimal(12, 3)
+  refType         String?           // 'order' | 'purchase' | 'count' | null
+  refId           String?
+  unitCost        Decimal?          @db.Decimal(10, 4)
+  totalCost       Decimal?          @db.Decimal(12, 2)
+  reason          String?
+  note            String?
+  actorId         String?
+  createdAt       DateTime          @default(now())
+
+  @@index([inventoryItemId, createdAt])
+  @@index([type])
+  @@index([refType, refId])
+}
+
+model RecipeLine {
+  id              String        @id @default(uuid())
+  menuItemId      String
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity        Decimal       @db.Decimal(12, 3)
+  unit            String        @default("pc")
+
+  @@unique([menuItemId, inventoryItemId])
+  @@index([menuItemId])
+}
+
+// ══════════════════════════════════════════════════════════════
+// Expenses (Phase 1) — Parent/Child category hierarchy
+// ══════════════════════════════════════════════════════════════
+
+/// Main (parent) expense category — e.g. "Fixed Expenses", "Variable Expenses"
+model MainExpenseCategory {
+  id          String              @id @default(uuid())
+  nameAr      String
+  nameEn      String
+  description String              @default("")
+  active      Boolean             @default(true)
+  subCategories SubExpenseCategory[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  @@index([active])
+  @@index([deletedAt])
+}
+
+/// Sub (child) expense category — belongs to exactly one MainExpenseCategory
+model SubExpenseCategory {
+  id              String              @id @default(uuid())
+  mainCategoryId  String
+  mainCategory    MainExpenseCategory @relation(fields: [mainCategoryId], references: [id], onDelete: Restrict)
+  nameAr          String
+  nameEn          String
+  description     String              @default("")
+  active          Boolean             @default(true)
+  expenses        Expense[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+
+  @@index([mainCategoryId])
+  @@index([active])
+  @@index([deletedAt])
+}
+
+/// Individual expense entry — linked to a SubExpenseCategory
+model Expense {
+  id              String              @id @default(uuid())
+  subCategoryId   String
+  subCategory     SubExpenseCategory  @relation(fields: [subCategoryId], references: [id], onDelete: Restrict)
+  amount          Decimal             @db.Decimal(10, 2)
+  spentAt         DateTime
+  paymentMethod   String              @default("cash") // cash | card | wallet | other
+  description     String
+  note            String?
+  receiptUrl      String?
+  recordedById    String?
+  recordedBy      User?               @relation("expenseRecordedBy", fields: [recordedById], references: [id])
+  cashShiftId     String?
+  cashShift       CashShift?          @relation(fields: [cashShiftId], references: [id])
+  deletedAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([subCategoryId])
+  @@index([spentAt])
+  @@index([paymentMethod])
+  @@index([cashShiftId])
+  @@index([deletedAt])
+  @@index([recordedById])
+}
+
+// ══════════════════════════════════════════════════════════════
+// Inventory Count (Phase 2)
+// ══════════════════════════════════════════════════════════════
+
+model InventoryCount {
+  id          String               @id @default(uuid())
+  status      String               @default("in_progress") // in_progress | completed | cancelled
+  countedById String?
+  startedAt   DateTime             @default(now())
+  completedAt DateTime?
+  note        String?
+  items       InventoryCountItem[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([status])
+  @@index([startedAt])
+}
+
+model InventoryCountItem {
+  id              String        @id @default(uuid())
+  countId         String
+  count           InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  systemQty       Decimal       @db.Decimal(12, 3)
+  actualQty       Decimal       @db.Decimal(12, 3)
+  difference      Decimal       @db.Decimal(12, 3)
+  reason          String?
+  note            String?
+
+  @@index([countId])
+  @@index([inventoryItemId])
+}
+
+// ══════════════════════════════════════════════════════════════
+// Audit Log — who did what, when
+// ══════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String   // e.g. 'cash_shift.open', 'cash_shift.close', 'expense.create', 'reconciliation.confirm'
+  entityType String   // e.g. 'CashShift', 'Expense', 'Reconciliation'
+  entityId   String   // ID of the affected entity
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  beforeJson Json?    // state before the change
+  afterJson  Json?    // state after the change
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ══════════════════════════════════════════════════════════════
+// Notifications & Alerts
+// ══════════════════════════════════════════════════════════════
+
+model Notification {
+  id            String           @id @default(uuid())
+  type          NotificationType
+  titleAr       String
+  titleEn       String
+  messageAr     String
+  messageEn     String
+  sourceType    String           // 'inventory' | 'menu'
+  sourceId      String           // ID of the inventory item or menu item
+  isRead        Boolean          @default(false)
+  resolvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([sourceType, sourceId])
+}
+
+// ══════════════════════════════════════════════════════════════
+// Table Management
+// ══════════════════════════════════════════════════════════════
+
+model Table {
+  id         String   @id @default(uuid())
+  number     Int      @unique
+  label      String?  // optional display label (e.g., "VIP-1")
+  capacity   Int      @default(4)
+  active     Boolean  @default(true)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([number])
+  @@index([active])
+}
+
+model MergedGroup {
+  id         String   @id @default(uuid())
+  label      String?  // optional label for the merged group
+  tableIds   String[] // array of Table IDs in this merge
+  orders     Order[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

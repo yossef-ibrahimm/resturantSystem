@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { Prisma, StockMovementType } from "@prisma/client";
+import { Prisma, StockMovement, StockMovementType, InventoryItem } from "@prisma/client";
 import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
@@ -10,9 +10,9 @@ export class StockService {
     private notificationsService: NotificationsService,
   ) {}
 
-  private async lockItem(tx: any, inventoryItemId: string) {
+  private async lockItem(tx: Prisma.TransactionClient, inventoryItemId: string): Promise<InventoryItem | null> {
     if (typeof tx.$queryRaw === "function") {
-      const rows = await tx.$queryRaw`
+      const rows = await tx.$queryRaw<InventoryItem[]>`
         SELECT * FROM "InventoryItem"
         WHERE "id" = ${inventoryItemId} AND "deletedAt" IS NULL
         FOR UPDATE
@@ -81,7 +81,7 @@ export class StockService {
     unit: string;
     unitCost?: number;
     actorId?: string;
-  }): Promise<{ movement: any; newQty: number }> {
+  }): Promise<{ movement: StockMovement; newQty: number }> {
     const { inventoryItemId, quantity, unit, unitCost, actorId } = params;
     if (quantity < 0) throw new BadRequestException("Opening quantity cannot be negative");
 
@@ -143,7 +143,7 @@ export class StockService {
     reason?: string;
     note?: string;
     actorId?: string;
-  }): Promise<{ movement: any; newQty: number }> {
+  }): Promise<{ movement: StockMovement; newQty: number }> {
     const { inventoryItemId, quantity, unit, type, refType, refId, unitCost, reason, note, actorId } = params;
 
     if (quantity <= 0) throw new BadRequestException("Quantity must be positive for stock addition");
@@ -225,7 +225,7 @@ export class StockService {
     reason?: string;
     note?: string;
     actorId?: string;
-  }): Promise<{ movement: any; newQty: number }> {
+  }): Promise<{ movement: StockMovement; newQty: number }> {
     const { inventoryItemId, quantity, unit, type, refType, refId, unitCost, reason, note, actorId } = params;
 
     if (quantity <= 0) throw new BadRequestException("Quantity must be positive for stock deduction");
@@ -292,7 +292,7 @@ export class StockService {
     reason: string;
     note?: string;
     actorId?: string;
-  }): Promise<{ movement: any; newQty: number }> {
+  }): Promise<{ movement: StockMovement; newQty: number }> {
     const { inventoryItemId, newQuantity, reason, note, actorId } = params;
 
     if (newQuantity < 0) throw new BadRequestException("Adjusted quantity cannot be negative");

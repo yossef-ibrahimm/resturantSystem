@@ -8,7 +8,7 @@ import { Logger } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
 import * as dotenv from "dotenv";
-import type { Order, RestaurantSettings, Notification } from "@prisma/client";
+import type { Order, RestaurantSettings, Notification, Table } from "@prisma/client";
 
 dotenv.config();
 
@@ -107,7 +107,9 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.to("waiter").emit("menu:availability", payload);
   }
 
-  broadcastTableUpdate(table: any) {
+  broadcastTableUpdate(
+    table: Table | { type: "merge"; mergedGroup: unknown } | { type: "unmerge"; mergedGroupId: string }
+  ) {
     this.server.to("admin").emit("table:updated", table);
     this.server.to("waiter").emit("table:updated", table);
     this.server.to("cashier").emit("table:updated", table);

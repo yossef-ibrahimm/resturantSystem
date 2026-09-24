@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import AttendanceToggle from "@/features/attendance/components/AttendanceToggle";
 import CashierPaymentDialog from "@/features/cashier/components/CashierPaymentDialog";
 import type { Order } from "@/lib/types";
+import type { StaleTableReport } from "@/lib/report-types";
 import type { TranslationKeys } from "@/i18n/ar";
 
 export default function WaiterPage() {
@@ -36,7 +37,7 @@ export default function WaiterPage() {
   const [now, setNow] = useState(Date.now());
   const [lastBillCount, setLastBillCount] = useState(0);
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
-  const [staleTables, setStaleTables] = useState<any[]>([]);
+  const [staleTables, setStaleTables] = useState<StaleTableReport["staleTables"]>([]);
 
   const { data: allOrders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();

@@ -9,7 +9,7 @@
 
 @layer base {
   :root {
-    /* Surfaces */
+    /* ── Surfaces ── */
     --background: 38 33% 96%;
     --foreground: 150 18% 12%;
 
@@ -19,12 +19,14 @@
     --popover: 36 40% 98%;
     --popover-foreground: 150 18% 12%;
 
-    /* Brand */
+    /* ── Brand ── */
     --primary: 153 32% 18%;
+    --primary-hover: 153 28% 26%;
     --primary-foreground: 38 40% 96%;
     --primary-glow: 153 28% 32%;
 
     --secondary: 36 22% 92%;
+    --secondary-hover: 35 26% 86%;
     --secondary-foreground: 150 18% 12%;
 
     --muted: 36 22% 90%;
@@ -34,8 +36,12 @@
     --accent-foreground: 38 40% 96%;
     --accent-soft: 16 60% 92%;
 
+    /* ── Metallic accent — thin dividers, price underlines, badge borders ── */
+    --accent-metal: 38 35% 58%;
+
     --destructive: 0 65% 48%;
-    --destructive-foreground: 38 40% 96%;
+ --destructive-hover: 0 70% 38%;
+     --destructive-foreground: 38 40% 96%;
 
     --border: 36 18% 84%;
     --input: 36 18% 84%;
@@ -43,17 +49,48 @@
 
     --radius: 0.75rem;
 
-    /* Gradients & shadows */
+    /* ── Status colors — central tokens for order status badges ── */
+    --status-received-bg: 217 91% 95%;
+    --status-received-fg: 217 91% 40%;
+    --status-received-border: 217 91% 88%;
+
+    --status-preparing-bg: 38 92% 93%;
+    --status-preparing-fg: 32 95% 44%;
+    --status-preparing-border: 38 92% 86%;
+
+    --status-ready-bg: 160 84% 92%;
+    --status-ready-fg: 160 84% 32%;
+    --status-ready-border: 160 84% 82%;
+
+    --status-completed-bg: 220 9% 93%;
+    --status-completed-fg: 220 9% 40%;
+    --status-completed-border: 220 9% 88%;
+
+    /* ── Social brand colors ── */
+    --social-facebook: 221 88% 53%;
+    --social-instagram: 347 76% 52%;
+    --social-tiktok: 150 18% 12%;
+    --social-whatsapp: 152 70% 46%;
+
+    /* ── Gradients ── */
     --gradient-warm: linear-gradient(135deg, hsl(36 40% 96%) 0%, hsl(36 50% 92%) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(150 25% 8% / 0.1) 0%, hsl(150 25% 8% / 0.85) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(16 55% 52%), hsl(22 62% 58%));
 
-    --shadow-soft: 0 1px 2px hsl(150 18% 12% / 0.04), 0 8px 24px -8px hsl(150 18% 12% / 0.08);
-    --shadow-elegant: 0 20px 60px -20px hsl(153 32% 18% / 0.25);
-    --shadow-card: 0 2px 4px hsl(150 18% 12% / 0.04), 0 12px 32px -12px hsl(150 18% 12% / 0.12);
+    /* ── Shadows — layered depth system ── */
+    --shadow-rest: 0 1px 2px hsl(150 18% 12% / 0.03), 0 2px 6px -1px hsl(150 18% 12% / 0.06);
+    --shadow-hover: 0 4px 8px -2px hsl(150 18% 12% / 0.06), 0 12px 28px -6px hsl(150 18% 12% / 0.10);
+    --shadow-elevated: 0 8px 16px -4px hsl(150 18% 12% / 0.08), 0 24px 48px -12px hsl(150 18% 12% / 0.14);
+    --shadow-modal: 0 20px 60px -20px hsl(153 32% 18% / 0.25);
+
+    /* Legacy aliases */
+    --shadow-soft: var(--shadow-rest);
+    --shadow-card: var(--shadow-hover);
+    --shadow-elegant: var(--shadow-modal);
 
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
+    /* ── Sidebar ── */
     --sidebar-background: 38 33% 96%;
     --sidebar-foreground: 150 18% 12%;
     --sidebar-primary: 153 32% 18%;
@@ -62,6 +99,16 @@
     --sidebar-accent-foreground: 150 18% 12%;
     --sidebar-border: 36 18% 84%;
     --sidebar-ring: 153 32% 18%;
+
+    /* ── Type scale (rem) ── */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+    --text-4xl: 2.25rem;
   }
 
   .dark {
@@ -72,20 +119,54 @@
     --popover: 150 18% 10%;
     --popover-foreground: 38 30% 94%;
     --primary: 38 40% 92%;
+    --primary-hover: 40 42% 85%;
     --primary-foreground: 150 20% 7%;
     --primary-glow: 38 30% 80%;
     --secondary: 150 14% 14%;
+    --secondary-hover: 150 16% 19%;
     --secondary-foreground: 38 30% 94%;
     --muted: 150 12% 16%;
     --muted-foreground: 38 12% 65%;
     --accent: 16 60% 58%;
     --accent-foreground: 150 20% 7%;
     --accent-soft: 16 30% 18%;
+    --accent-metal: 38 30% 65%;
     --destructive: 0 62% 50%;
+    --destructive-hover: 0 68% 55%;
     --destructive-foreground: 38 30% 94%;
     --border: 150 12% 18%;
     --input: 150 12% 18%;
     --ring: 38 40% 92%;
+
+    --status-received-bg: 217 60% 14%;
+    --status-received-fg: 217 80% 75%;
+    --status-received-border: 217 50% 22%;
+
+    --status-preparing-bg: 38 50% 12%;
+    --status-preparing-fg: 38 90% 72%;
+    --status-preparing-border: 38 40% 20%;
+
+    --status-ready-bg: 160 40% 12%;
+    --status-ready-fg: 160 70% 68%;
+    --status-ready-border: 160 35% 20%;
+
+    --status-completed-bg: 220 10% 14%;
+    --status-completed-fg: 220 10% 60%;
+    --status-completed-border: 220 8% 20%;
+
+    --social-facebook: 221 88% 65%;
+    --social-instagram: 347 76% 62%;
+    --social-tiktok: 38 30% 94%;
+    --social-whatsapp: 152 70% 58%;
+
+    --shadow-rest: 0 1px 3px hsl(0 0% 0% / 0.15), 0 2px 6px -1px hsl(0 0% 0% / 0.20);
+    --shadow-hover: 0 4px 8px -2px hsl(0 0% 0% / 0.20), 0 12px 28px -6px hsl(0 0% 0% / 0.28);
+    --shadow-elevated: 0 8px 16px -4px hsl(0 0% 0% / 0.25), 0 24px 48px -12px hsl(0 0% 0% / 0.35);
+    --shadow-modal: 0 20px 60px -20px hsl(0 0% 0% / 0.50);
+
+    --shadow-soft: var(--shadow-rest);
+    --shadow-card: var(--shadow-hover);
+    --shadow-elegant: var(--shadow-modal);
   }
 }
 
@@ -103,16 +184,40 @@
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
   }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    html { scroll-behavior: auto; }
+  }
 }
 
-/* RTL-specific adjustments */
+/* ── RTL ── */
 [dir="rtl"] {
   text-align: right;
 }
 
-/* Arabic font override */
+/* ── Arabic display heading font (Noto Kufi Arabic for character) ── */
 html[lang="ar"] body {
   font-family: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+html[lang="ar"] h1,
+html[lang="ar"] h2,
+html[lang="ar"] h3,
+html[lang="ar"] h4 {
+  font-family: "Noto Kufi Arabic", "Cairo", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── LTR English display heading font (Fraunces) ── */
+html[lang="en"] h1,
+html[lang="en"] h2,
+html[lang="en"] h3,
+html[lang="en"] h4 {
+  font-family: "Fraunces", "Georgia", ui-serif, serif;
 }
 
 @layer utilities {
@@ -122,5 +227,10 @@ html[lang="ar"] body {
   .bg-noise {
     background-image: radial-gradient(hsl(var(--foreground) / 0.025) 1px, transparent 1px);
     background-size: 4px 4px;
+  }
+
+  /* ── Button press feedback ── */
+  .btn-press:active:not(:disabled) {
+    transform: translateY(1px) scale(0.985);
   }
 }

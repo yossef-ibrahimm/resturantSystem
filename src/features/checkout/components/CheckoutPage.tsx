@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useLanguage } from "@/i18n";
 import { useCartStore } from "@/stores/cartStore";
 import { useActiveOrderStore } from "@/stores/activeOrderStore";
 import { createOrder } from "@/lib/api";
+import { useSettingsQuery } from "@/hooks/useSettings";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,55 +19,82 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Minus, Plus, Trash2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
+const checkoutSchema = z.object({
+  customerName: z.string().trim().min(1, "Customer name is required").max(80, "Name must be at most 80 characters"),
+  phone: z.string().max(20, "Phone must be at most 20 characters").optional().or(z.literal("")),
+  orderType: z.enum(["dine_in", "takeaway"]),
+  tableNumber: z.string().optional().or(z.literal("")),
+  notes: z.string().max(280, "Notes must be at most 280 characters").optional().or(z.literal("")),
+});
+
+type CheckoutFormData = z.infer<typeof checkoutSchema>;
+
 export default function CheckoutPage() {
   const { t, isArabic, language } = useLanguage();
   const { items, total, updateQuantity, removeItem, clearCart } = useCartStore();
+  const { data: settings } = useSettingsQuery();
   const setOrder = useActiveOrderStore((s) => s.setOrder);
   const navigate = useNavigate();
 
-  const [customerName, setCustomerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
-  const [tableNumber, setTableNumber] = useState("");
-  const [notes, setNotes] = useState("");
+  const taxRate = settings?.taxEnabled ? (settings?.taxRate ?? 0) : 0;
+  const serviceRate = settings?.serviceEnabled ? (settings?.serviceRate ?? 0) : 0;
+  const taxAmount = total * taxRate;
+  const serviceAmount = total * serviceRate;
+  const grandTotal = total + taxAmount + serviceAmount;
+
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const submittingRef = useRef(false);
 
-  const validate = () => {
-    const errs: Record<string, string> = {};
-    if (!customerName.trim()) errs.customerName = t.checkout.requiredField;
-    if (orderType === "dine_in" && !tableNumber.trim()) errs.tableNumber = t.checkout.requiredField;
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CheckoutFormData>({
+    resolver: zodResolver(checkoutSchema),
+    defaultValues: {
+      customerName: "",
+      phone: "",
+      orderType: "dine_in",
+      tableNumber: "",
+      notes: "",
+    },
+  });
 
-  const handleSubmit = async () => {
-    if (!validate() || items.length === 0) return;
+  const orderType = watch("orderType");
+
+  const onSubmit = async (data: CheckoutFormData) => {
+    if (items.length === 0 || submittingRef.current) return;
+
+    if (data.orderType === "dine_in") {
+      const parsed = Number(data.tableNumber);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > 500) {
+        toast.error(isArabic ? "رقم الطاولة غير صالح (1-500)" : "Invalid table number (1-500)");
+        return;
+      }
+    }
+
+    submittingRef.current = true;
     setSubmitting(true);
     try {
+      const idempotencyKey = crypto.randomUUID();
       const order = await createOrder({
-        customerName: customerName.trim(),
-        phone: phone.trim() || undefined,
-        orderType,
-        tableNumber: orderType === "dine_in" ? Number(tableNumber) : undefined,
-        notes: notes.trim() || undefined,
+        customerName: data.customerName.trim(),
+        phone: data.phone?.trim() || undefined,
+        orderType: data.orderType,
+        tableNumber: data.orderType === "dine_in" ? Number(data.tableNumber) : undefined,
+        notes: data.notes?.trim() || undefined,
+        idempotencyKey,
         items: items.map((item) => ({
           menuItemId: item.menuItem.id,
-          nameAr: item.menuItem.nameAr,
-          nameEn: item.menuItem.nameEn,
           quantity: item.quantity,
-          unitPrice: item.variant ? item.menuItem.price + item.variant.priceAdjust : item.menuItem.price,
           variant: item.variant ? (isArabic ? item.variant.nameAr : item.variant.nameEn) : undefined,
           notes: item.notes,
         })),
       });
       clearCart();
       toast.success(t.checkout.orderPlaced);
-      setOrder(order.orderNumber, order.status);
-      navigate(`/order-status?order=${order.orderNumber}`);
+      setOrder(order.orderNumber, order.status, order.orderToken);
+      navigate(`/order-status?token=${order.orderToken}`);
     } catch {
       toast.error(t.error);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -85,7 +116,7 @@ export default function CheckoutPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Form */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-2">
           <Card>
             <CardHeader>
               <CardTitle>{t.checkout.customerName}</CardTitle>
@@ -95,36 +126,39 @@ export default function CheckoutPage() {
                 <Label htmlFor="name">{t.checkout.customerName} *</Label>
                 <Input
                   id="name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  {...register("customerName")}
                   placeholder={t.checkout.customerNamePlaceholder}
-                  className={errors.customerName ? "border-destructive" : ""}
+                  aria-invalid={!!errors.customerName}
+                  aria-describedby={errors.customerName ? "name-error" : undefined}
                 />
                 {errors.customerName && (
-                  <p className="text-xs text-destructive">{errors.customerName}</p>
+                  <p id="name-error" className="text-xs text-destructive">{errors.customerName.message}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">{t.checkout.phone}</Label>
                 <Input
                   id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  {...register("phone")}
                   placeholder={t.checkout.phonePlaceholder}
                   dir="ltr"
+                  aria-invalid={!!errors.phone}
+                  aria-describedby={errors.phone ? "phone-error" : undefined}
                 />
+                {errors.phone && (
+                  <p id="phone-error" className="text-xs text-destructive">{errors.phone.message}</p>
+                )}
               </div>
             </CardContent>
-          </Card>
-
-          <Card>
+         
             <CardHeader>
+              
               <CardTitle>{t.checkout.orderType}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <RadioGroup
                 value={orderType}
-                onValueChange={(v) => setOrderType(v as "dine_in" | "takeaway")}
+                onValueChange={(v) => setValue("orderType", v as "dine_in" | "takeaway")}
                 className="grid grid-cols-2 gap-4"
               >
                 <Label
@@ -157,14 +191,11 @@ export default function CheckoutPage() {
                   <Input
                     id="table"
                     type="number"
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
+                    {...register("tableNumber")}
                     placeholder={t.checkout.tableNumberPlaceholder}
-                    className={errors.tableNumber ? "border-destructive" : ""}
+                    min={1}
+                    max={500}
                   />
-                  {errors.tableNumber && (
-                    <p className="text-xs text-destructive">{errors.tableNumber}</p>
-                  )}
                 </div>
               )}
 
@@ -172,11 +203,15 @@ export default function CheckoutPage() {
                 <Label htmlFor="notes">{t.checkout.notes}</Label>
                 <Textarea
                   id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  {...register("notes")}
                   placeholder={t.checkout.notesPlaceholder}
                   rows={3}
+                  aria-invalid={!!errors.notes}
+                  aria-describedby={errors.notes ? "notes-error" : undefined}
                 />
+                {errors.notes && (
+                  <p id="notes-error" className="text-xs text-destructive">{errors.notes.message}</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -243,15 +278,36 @@ export default function CheckoutPage() {
 
               <Separator />
 
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>{t.cart.subtotal}</span>
+                  <span>{formatPrice(total, language)}</span>
+                </div>
+                {taxRate > 0 && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>{t.cart.tax} ({(taxRate * 100).toFixed(1)}%)</span>
+                    <span>{formatPrice(taxAmount, language)}</span>
+                  </div>
+                )}
+                {serviceRate > 0 && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>{t.cart.service} ({(serviceRate * 100).toFixed(1)}%)</span>
+                    <span>{formatPrice(serviceAmount, language)}</span>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
               <div className="flex items-center justify-between font-bold text-lg">
                 <span>{t.cart.total}</span>
-                <span>{formatPrice(total, language)}</span>
+                <span className="text-primary">{formatPrice(grandTotal, language)}</span>
               </div>
 
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleSubmit}
+                onClick={handleSubmit(onSubmit)}
                 disabled={submitting}
               >
                 {submitting ? t.loading : t.checkout.placeOrder}

@@ -1,26 +1,17 @@
-import { Injectable, ExecutionContext } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { Injectable, ExecutionContext, ForbiddenException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { IS_PUBLIC_KEY } from "./public.decorator";
 import { ROLES_KEY } from "../decorators/roles.decorator";
 
+/**
+ * Role-based access guard. JWT validation is handled globally by JwtAuthGuard.
+ * This guard only checks that the authenticated user has the required role.
+ * Throws 403 Forbidden if the user's role is not in the allowed list.
+ */
 @Injectable()
-export class RolesGuard extends AuthGuard("jwt") {
-  constructor(private reflector: Reflector) {
-    super();
-  }
+export class RolesGuard {
+  constructor(private reflector: Reflector) {}
 
-  async canActivate(context: ExecutionContext) {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) return true;
-
-    // Run JWT authentication first
-    const authenticated = await super.canActivate(context);
-    if (!authenticated) return false;
-
+  canActivate(context: ExecutionContext) {
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -31,7 +22,16 @@ export class RolesGuard extends AuthGuard("jwt") {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user) return false;
-    return requiredRoles.includes(user.role);
+    if (!user) {
+      throw new ForbiddenException("No authenticated user found");
+    }
+
+    if (!requiredRoles.includes(user.role)) {
+      throw new ForbiddenException(
+        `User role "${user.role}" is not authorized. Required: ${requiredRoles.join(", ")}`
+      );
+    }
+
+    return true;
   }
 }

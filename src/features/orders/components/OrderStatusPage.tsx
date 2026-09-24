@@ -31,6 +31,44 @@ export default function OrderStatusPage() {
     const token = initialOrder.trim();
     if (!token) return;
     orderTokenRef.current = token;
+
+    const fetchOrder = async (tok: string) => {
+      setLoading(true);
+      setNotFound(false);
+      notFoundRef.current = false;
+      try {
+        const found = await getOrderByToken(tok);
+        if (found) {
+          if (found.paymentStatus === "paid") {
+            setOrder(null);
+            clearOrder();
+            return;
+          }
+          setOrder(found);
+          setSearchParams({ token: found.orderToken });
+          updateStatus(found.status);
+        } else {
+          setOrder(null);
+          setNotFound(true);
+          notFoundRef.current = true;
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : undefined;
+        const status =
+          typeof err === "object" && err !== null && "status" in err
+            ? (err as { status?: unknown }).status
+            : undefined;
+        if (message?.includes("429") || message?.includes("Too Many")) return;
+        // Only stop polling on actual 404, not on transient errors
+        if (message?.includes("404") || status === 404) {
+          setNotFound(true);
+          notFoundRef.current = true;
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchOrder(token);
 
     const interval = setInterval(() => {
@@ -40,7 +78,7 @@ export default function OrderStatusPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [initialOrder]);
+  }, [initialOrder, setSearchParams, updateStatus, clearOrder]);
 
   useEffect(() => {
     if (order && order.paymentStatus === "paid") {
@@ -48,38 +86,6 @@ export default function OrderStatusPage() {
       setOrder(null);
     }
   }, [order, clearOrder]);
-
-  const fetchOrder = async (token: string) => {
-    setLoading(true);
-    setNotFound(false);
-    notFoundRef.current = false;
-    try {
-      const found = await getOrderByToken(token);
-      if (found) {
-        if (found.paymentStatus === "paid") {
-          setOrder(null);
-          clearOrder();
-          return;
-        }
-        setOrder(found);
-        setSearchParams({ token: found.orderToken });
-        updateStatus(found.status);
-      } else {
-        setOrder(null);
-        setNotFound(true);
-        notFoundRef.current = true;
-      }
-    } catch (err: any) {
-      if (err?.message?.includes("429") || err?.message?.includes("Too Many")) return;
-      // Only stop polling on actual 404, not on transient errors
-      if (err?.message?.includes("404") || err?.status === 404) {
-        setNotFound(true);
-        notFoundRef.current = true;
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const currentStep = order ? (ORDER_STATUS_FLOW as readonly string[]).indexOf(order.status) : 0;
 

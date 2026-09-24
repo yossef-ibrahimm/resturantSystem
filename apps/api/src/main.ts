@@ -1,8 +1,9 @@
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, Logger } from "@nestjs/common";
 import helmet from "helmet";
 import * as dotenv from "dotenv";
 import * as express from "express";
+import * as cookieParser from "cookie-parser";
 import * as path from "path";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
@@ -24,6 +25,8 @@ async function bootstrap() {
   app.setGlobalPrefix("api");
 
   app.use(helmet());
+
+  app.use(cookieParser());
 
   app.getHttpAdapter().getInstance().set("trust proxy", 1);
 
@@ -50,6 +53,6 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`API running on http://localhost:${port}`);
+  new Logger("Bootstrap").log(`API running on http://localhost:${port}`);
 }
 bootstrap();

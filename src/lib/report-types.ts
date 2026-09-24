@@ -7,6 +7,13 @@ export interface ReportSummary {
   avgValueChange: number | null;
   dineIn: number;
   takeaway: number;
+  grossSales: number;
+  discounts: number;
+  tax: number;
+  serviceCharge: number;
+  netSales: number;
+  refunds: number;
+  collectedCash: number;
   range: { from: string; to: string };
 }
 
@@ -71,4 +78,38 @@ export interface UnavailableItem {
   nameEn: string;
   price: number;
   image: string;
+}
+
+export interface TableOccupancyReport {
+  totalTables: number;
+  occupiedTables: number;
+  availableTables: number;
+  occupancyRate: number;
+  tables: {
+    id: string;
+    number: number;
+    label: string | null;
+    capacity: number;
+    occupied: boolean;
+    activeOrders: number;
+    oldestOrderAt: string | null;
+    customerName: string | null;
+  }[];
+  range: { from: string; to: string };
+}
+
+export interface StaleTableReport {
+  staleTables: {
+    id: string;
+    number: number;
+    label: string | null;
+    capacity: number;
+    activeOrders: number;
+    oldestOrderAt: string;
+    elapsedMinutes: number;
+    thresholdMinutes: number;
+    customerName: string | null;
+  }[];
+  thresholdMinutes: number;
+  totalStale: number;
 }

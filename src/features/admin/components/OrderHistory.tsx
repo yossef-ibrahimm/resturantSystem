@@ -106,8 +106,8 @@ export default function OrderHistory() {
       setRefundErrors({});
       if (selectedOrder) loadOrderPayments(selectedOrder.id);
       loadOrders();
-    } catch (err: any) {
-      toast.error(err?.message || (isArabic ? "فشل الاسترداد" : "Refund failed"));
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || (isArabic ? "تعذر تنفيذ الاسترداد" : "Refund failed"));
     }
   };
 
@@ -144,8 +144,8 @@ export default function OrderHistory() {
       setDiscountReason("");
       setDiscountErrors({});
       loadOrders();
-    } catch (err: any) {
-      toast.error(err?.message || (isArabic ? "فشل تطبيق الخصم" : "Discount failed"));
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : undefined) || (isArabic ? "تعذر تطبيق الخصم" : "Discount failed"));
     }
   };
 

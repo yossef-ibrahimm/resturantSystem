@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "3001:3001"
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -34,7 +34,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:3001/tastytable?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tastytable?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       PORT: ${PORT:-3001}

@@ -3,13 +3,13 @@ import { MenuService } from "./menu.service";
 import { Public } from "../common/guards/public.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
-import { IsString, IsNumber, IsOptional, IsBoolean, Min } from "class-validator";
+import { IsString, IsNumber, IsOptional, IsBoolean, Min, MinLength } from "class-validator";
 
 // ─── DTOs ───
 
 class CreateCategoryDto {
-  @IsString() nameAr: string;
-  @IsString() nameEn: string;
+  @IsString() @MinLength(1) nameAr: string;
+  @IsString() @MinLength(1) nameEn: string;
   @IsNumber() @IsOptional() sortOrder?: number;
 }
 
@@ -21,11 +21,11 @@ class UpdateCategoryDto {
 
 class CreateMenuItemDto {
   @IsString() categoryId: string;
-  @IsString() nameAr: string;
-  @IsString() nameEn: string;
+  @IsString() @MinLength(1) nameAr: string;
+  @IsString() @MinLength(1) nameEn: string;
   @IsString() @IsOptional() descriptionAr?: string;
   @IsString() @IsOptional() descriptionEn?: string;
-  @IsNumber() @Min(0) price: number;
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) price: number;
   @IsString() @IsOptional() image?: string;
   @IsBoolean() @IsOptional() available?: boolean;
 }
@@ -36,7 +36,7 @@ class UpdateMenuItemDto {
   @IsString() @IsOptional() nameEn?: string;
   @IsString() @IsOptional() descriptionAr?: string;
   @IsString() @IsOptional() descriptionEn?: string;
-  @IsNumber() @IsOptional() price?: number;
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @IsOptional() price?: number;
   @IsString() @IsOptional() image?: string;
   @IsBoolean() @IsOptional() available?: boolean;
 }

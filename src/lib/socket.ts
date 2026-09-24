@@ -1,31 +1,34 @@
 import { io, Socket } from "socket.io-client";
 
-const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3001";
+const WS_URL = import.meta.env.VITE_WS_URL || "/";
 
 let socket: Socket | null = null;
+let refCount = 0;
 const eventHandlers = new Map<string, Set<(data: unknown) => void>>();
 
-export function connectSocket(token: string): Socket {
+export function connectSocket(): Socket {
+  refCount++;
   if (socket?.connected) return socket;
 
   socket = io(WS_URL, {
-    auth: { token },
+    withCredentials: true,
     transports: ["websocket", "polling"],
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 20,
     reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
   });
 
   socket.on("connect", () => {
-    console.log("Socket connected");
+    // connected
   });
 
-  socket.on("disconnect", (reason) => {
-    console.log("Socket disconnected:", reason);
+  socket.on("disconnect", () => {
+    // disconnected
   });
 
-  socket.on("connect_error", (err) => {
-    console.error("Socket connection error:", err.message);
+  socket.on("connect_error", () => {
+    // connection error
   });
 
   socket.onAny((event, ...args) => {
@@ -39,7 +42,9 @@ export function connectSocket(token: string): Socket {
 }
 
 export function disconnectSocket(): void {
-  if (socket) {
+  refCount--;
+  if (refCount <= 0 && socket) {
+    refCount = 0;
     socket.removeAllListeners();
     socket.disconnect();
     socket = null;

@@ -245,3 +245,22 @@ export interface StaleTable {
   elapsedMinutes: number;
   thresholdMinutes: number;
 }
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  amount: number;
+  method: string;
+  actorId?: string | null;
+  refundedPaymentId?: string | null;
+  approvedById?: string | null;
+  cashShiftId?: string | null;
+  reason?: string | null;
+  idempotencyKey?: string | null;
+  paidAt: string;
+  note?: string | null;
+}
+
+export interface PaymentWithOrder extends Payment {
+  order: Order;
+}

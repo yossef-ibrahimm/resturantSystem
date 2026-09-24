@@ -130,7 +130,9 @@ export default function OrdersReportPage() {
       if (reqId !== abortRef.current) return;
       setStatusData(st);
       setPeakHours(ph);
-    } catch {} finally {
+    } catch {
+      // ignore — leave prior state
+    } finally {
       if (reqId === abortRef.current) setLoading(false);
     }
   }, []);

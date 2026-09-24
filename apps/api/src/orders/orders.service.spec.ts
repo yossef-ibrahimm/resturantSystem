@@ -22,7 +22,54 @@ describe("OrdersService", () => {
   let stockService: { consumeForSale: jest.Mock };
   let paymentsService: { createPayment: jest.Mock; getOrderPayments: jest.Mock };
 
-  const mockOrder: any = {
+  interface MockOrder {
+    id: string;
+    orderNumber: string;
+    customerName: string;
+    phone: string | null;
+    orderType: string;
+    tableNumber: number | null;
+    notes: string | null;
+    status: string;
+    paymentStatus: string;
+    billRequested: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    itemsTotal: number;
+    discountAmount: number;
+    taxRate: number;
+    taxAmount: number;
+    serviceRate: number;
+    serviceAmount: number;
+    total: number;
+    paidTotal: number;
+    legacyBackfilled: boolean;
+    items: { menuItemId: string; quantity: number; variant?: string }[];
+  }
+
+  interface OrderCreateData {
+    items: { create: { unitPrice: number; nameEn: string }[] };
+    itemsTotal: { toString(): string };
+    taxAmount: { toString(): string };
+    taxRate: { toString(): string };
+    serviceAmount: { toString(): string };
+    serviceRate: { toString(): string };
+    total: { toString(): string };
+  }
+
+  interface CapturedUpdateManyArgs {
+    where: Record<string, unknown>;
+    data: Record<string, unknown> & {
+      status?: string;
+      preparingById?: string;
+      preparingAt?: Date;
+      cancelReason?: string;
+      cancelledById?: string;
+      cancelledAt?: Date;
+    };
+  }
+
+  const mockOrder: MockOrder = {
     id: "order-1",
     orderNumber: "1001",
     customerName: "Test Customer",
@@ -109,7 +156,7 @@ describe("OrdersService", () => {
       prisma.menuItem.findMany.mockResolvedValue([menuItem]);
       const createdOrder = { ...mockOrder, items: [] };
 
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           orderCounter: { upsert: jest.fn().mockResolvedValue({ value: 1001 }) },
           restaurantSettings: { findUnique: jest.fn().mockResolvedValue(defaultSettings) },
@@ -130,13 +177,13 @@ describe("OrdersService", () => {
 
     it("computes unitPrice from DB price + variant priceAdjust (Decimal-safe)", async () => {
       prisma.menuItem.findMany.mockResolvedValue([menuItem]);
-      let capturedData: any;
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      let capturedData!: OrderCreateData;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           orderCounter: { upsert: jest.fn().mockResolvedValue({ value: 1001 }) },
           restaurantSettings: { findUnique: jest.fn().mockResolvedValue(defaultSettings) },
           order: {
-            create: jest.fn().mockImplementation(({ data }: any) => {
+            create: jest.fn().mockImplementation(({ data }: { data: OrderCreateData }) => {
               capturedData = data;
               return { ...mockOrder, items: [] };
             }),
@@ -169,13 +216,13 @@ describe("OrdersService", () => {
         serviceRate: 0.10,
       };
       prisma.menuItem.findMany.mockResolvedValue([menuItem]);
-      let capturedData: any;
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      let capturedData!: OrderCreateData;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           orderCounter: { upsert: jest.fn().mockResolvedValue({ value: 1001 }) },
           restaurantSettings: { findUnique: jest.fn().mockResolvedValue(settingsWithTax) },
           order: {
-            create: jest.fn().mockImplementation(({ data }: any) => {
+            create: jest.fn().mockImplementation(({ data }: { data: OrderCreateData }) => {
               capturedData = data;
               return { ...mockOrder, items: [] };
             }),
@@ -278,7 +325,7 @@ describe("OrdersService", () => {
 
   describe("updateStatus — race-safe transitions", () => {
     function txForTransition(currentStatus: string | null, finalOrder: typeof mockOrder) {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest
@@ -313,15 +360,15 @@ describe("OrdersService", () => {
 
     it("writes preparingAt/preparingById on the guarded updateMany", async () => {
       txForTransition("received", { ...mockOrder, status: "preparing" });
-      let capturedArgs: any;
-      prisma.$transaction.mockImplementation(async (fn: any) => {
+      let capturedArgs!: CapturedUpdateManyArgs;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
         const txClient = {
           order: {
             findUnique: jest
               .fn()
               .mockResolvedValueOnce({ status: "received" })
               .mockResolvedValue({ ...mockOrder, status: "preparing" }),
-            updateMany: jest.fn().mockImplementation((args: any) => {
+            updateMany: jest.fn().mockImplementation((args: CapturedUpdateManyArgs) => {
               capturedArgs = args;
               return Promise.resolve({ count: 1 });
             }),
@@ -362,7 +409,7 @@ describe("OrdersService", () => {
     });
 
     it("throws ConflictException when a concurrent writer wins the guarded update", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "received" }),
@@ -377,7 +424,7 @@ describe("OrdersService", () => {
     });
 
     it("refuses to progress cancelled orders", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "cancelled" }),
@@ -402,15 +449,15 @@ describe("OrdersService", () => {
 
   describe("cancel — admin cancellation (A3/A4)", () => {
     it("cancels a received order with reason + actor stamped", async () => {
-      let capturedArgs: any;
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      let capturedArgs!: CapturedUpdateManyArgs;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest
               .fn()
               .mockResolvedValueOnce({ status: "received" })
               .mockResolvedValue({ ...mockOrder, status: "cancelled" }),
-            updateMany: jest.fn().mockImplementation((args: any) => {
+            updateMany: jest.fn().mockImplementation((args: CapturedUpdateManyArgs) => {
               capturedArgs = args;
               return Promise.resolve({ count: 1 });
             }),
@@ -433,7 +480,7 @@ describe("OrdersService", () => {
     });
 
     it("refuses to cancel completed orders", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "completed" }),
@@ -448,7 +495,7 @@ describe("OrdersService", () => {
     });
 
     it("refuses to cancel ready orders (BE-006: only received/preparing)", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "ready" }),
@@ -463,15 +510,15 @@ describe("OrdersService", () => {
     });
 
     it("cancels a preparing order", async () => {
-      let capturedArgs: any;
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      let capturedArgs!: CapturedUpdateManyArgs;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest
               .fn()
               .mockResolvedValueOnce({ status: "preparing" })
               .mockResolvedValue({ ...mockOrder, status: "cancelled" }),
-            updateMany: jest.fn().mockImplementation((args: any) => {
+            updateMany: jest.fn().mockImplementation((args: CapturedUpdateManyArgs) => {
               capturedArgs = args;
               return Promise.resolve({ count: 1 });
             }),
@@ -485,7 +532,7 @@ describe("OrdersService", () => {
     });
 
     it("refuses double-cancel", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "cancelled" }),
@@ -500,7 +547,7 @@ describe("OrdersService", () => {
     });
 
     it("throws ConflictException on concurrent modification", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({ status: "received" }),
@@ -566,7 +613,7 @@ describe("OrdersService", () => {
 
   describe("applyDiscount", () => {
     it("rejects a discount after payment has been recorded", async () => {
-      prisma.$transaction.mockImplementation(async (fn: any) =>
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           order: {
             findUnique: jest.fn().mockResolvedValue({

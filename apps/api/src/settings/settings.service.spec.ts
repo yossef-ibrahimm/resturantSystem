@@ -109,7 +109,7 @@ describe("SettingsService", () => {
     it("strips undefined values from the payload", async () => {
       prisma.restaurantSettings.upsert.mockResolvedValue(mockSettings);
 
-      await service.update({ nameEn: "X", logoUrl: undefined } as any);
+      await service.update({ nameEn: "X", logoUrl: undefined });
 
       const args = prisma.restaurantSettings.upsert.mock.calls[0][0];
       expect(args.update).toEqual({ nameEn: "X" });
