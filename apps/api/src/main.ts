@@ -12,6 +12,7 @@ dotenv.config();
 
 if (process.env.NODE_ENV === "production") {
   const secret = process.env.JWT_SECRET;
+
   if (!secret || secret === "change-this-to-a-strong-random-secret") {
     throw new Error(
       "JWT_SECRET must be set to a strong random value in production. Refusing to start."
@@ -35,7 +36,12 @@ async function bootstrap() {
     express.static(path.resolve(process.env.LOCAL_UPLOAD_DIR || "uploads"))
   );
 
-  const frontendUrls = (process.env.FRONTEND_URL || "http://localhost:8080").split(",").map(s => s.trim());
+  const frontendUrls = (
+    process.env.FRONTEND_URL || "http://localhost:8080"
+  )
+    .split(",")
+    .map((s) => s.trim());
+
   app.enableCors({
     origin: frontendUrls,
     credentials: true,
@@ -52,7 +58,12 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
-  new Logger("Bootstrap").log(`API running on http://localhost:${port}`);
+
+  await app.listen(port, "0.0.0.0");
+
+  new Logger("Bootstrap").log(
+    `API running on http://0.0.0.0:${port}`
+  );
 }
+
 bootstrap();
